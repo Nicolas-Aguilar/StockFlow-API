@@ -25,6 +25,10 @@
 
 ## Configuracion
 
-- `appsettings*.json` usa valores de desarrollo local.
-- Docker y base local usan credenciales claramente marcadas como desarrollo.
-- No hay secretos productivos versionados.
+- `src/StockFlow.Api/appsettings.json` conserva solo placeholders y configuracion no sensible.
+- `src/StockFlow.Api/appsettings.Development.json` ya no replica secretos; solo redefine logging de desarrollo.
+- La API usa `dotnet user-secrets` como mecanismo recomendado para `ConnectionStrings:DefaultConnection` y `Jwt:Key` en desarrollo local.
+- Docker Compose toma `SQLSERVER_SA_PASSWORD` desde `.env`, y `.env.example` documenta los nombres requeridos sin exponer credenciales reales.
+- `scripts/bootstrap.ps1` y `scripts/bootstrap.sh` generan credenciales locales solo cuando faltan y las guardan fuera del repositorio versionado.
+- `AppDbContextFactory` consume la misma jerarquia de configuracion que la API para evitar secretos hardcodeados en migraciones.
+- Las credenciales que estuvieron versionadas historicamente deben tratarse como comprometidas y rotarse si se reutilizaron fuera del entorno local.

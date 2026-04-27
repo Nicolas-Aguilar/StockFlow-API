@@ -2,6 +2,7 @@ using StockFlow.Application.Common;
 using StockFlow.Application.DTOs.Sales;
 using StockFlow.Application.Interfaces;
 using StockFlow.Domain.Entities;
+using StockFlow.Domain.Enums;
 using StockFlow.Domain.Exceptions;
 
 namespace StockFlow.Application.Services;
@@ -40,8 +41,8 @@ public sealed class SaleService : ISaleService
         await _saleRepository.ExecuteInTransactionAsync(async ct =>
         {
             var productIds = request.Items.Select(item => item.ProductId).Distinct().ToArray();
-            var products = await _productRepository.GetAllAsync(_userContext.BusinessId, null, ct);
-            var productMap = products.Where(product => productIds.Contains(product.Id)).ToDictionary(product => product.Id);
+            var products = await _productRepository.GetByIdsAsync(_userContext.BusinessId, productIds, ct);
+            var productMap = products.ToDictionary(product => product.Id);
 
             if (productMap.Count != productIds.Length)
             {
@@ -60,6 +61,16 @@ public sealed class SaleService : ISaleService
                 var product = productMap[item.ProductId];
                 ValidateProductAvailability(product, item.Quantity);
 
+                var stockUpdatedAt = _dateTimeProvider.UtcNow;
+                var stockUpdated = await _productRepository.TryUpdateStockAsync(product.Id, _userContext.BusinessId, -item.Quantity, stockUpdatedAt, ct);
+
+                if (!stockUpdated)
+                {
+                    throw new InsufficientStockException($"Product '{product.Name}' does not have enough stock.");
+                }
+
+                product.ApplyInventoryMovement(InventoryMovementType.Sale, item.Quantity, stockUpdatedAt);
+
                 var subtotal = product.SalePrice * item.Quantity;
                 var estimatedProfit = (product.SalePrice - product.PurchasePrice) * item.Quantity;
 
@@ -70,14 +81,11 @@ public sealed class SaleService : ISaleService
                     UnitPrice = product.SalePrice,
                     UnitPurchasePrice = product.PurchasePrice,
                     Subtotal = subtotal,
-                    EstimatedProfit = estimatedProfit,
-                    Product = product
+                    EstimatedProfit = estimatedProfit
                 });
 
                 sale.Total += subtotal;
                 sale.EstimatedProfit += estimatedProfit;
-                product.CurrentStock -= item.Quantity;
-                product.UpdatedAt = _dateTimeProvider.UtcNow;
             }
 
             await _saleRepository.AddAsync(sale, ct);
@@ -85,7 +93,7 @@ public sealed class SaleService : ISaleService
             {
                 BusinessId = _userContext.BusinessId,
                 ProductId = item.ProductId,
-                MovementType = StockFlow.Domain.Enums.InventoryMovementType.Sale,
+                MovementType = InventoryMovementType.Sale,
                 Quantity = item.Quantity,
                 Reason = "Created by sale",
                 CreatedAt = _dateTimeProvider.UtcNow
@@ -97,10 +105,10 @@ public sealed class SaleService : ISaleService
         return (await GetByIdAsync(createdSale!.Id, cancellationToken));
     }
 
-    public async Task<IReadOnlyCollection<SaleResponse>> GetAllAsync(CancellationToken cancellationToken = default)
+    public async Task<PagedResponse<SaleResponse>> GetAllAsync(PaginationQuery paginationQuery, CancellationToken cancellationToken = default)
     {
-        var sales = await _saleRepository.GetAllAsync(_userContext.BusinessId, cancellationToken);
-        return sales.Select(sale => sale.ToResponse()).ToArray();
+        var sales = await _saleRepository.GetPagedAsync(_userContext.BusinessId, paginationQuery, cancellationToken);
+        return sales.ToPagedResponse(sale => sale.ToResponse());
     }
 
     public async Task<SaleResponse> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
@@ -110,7 +118,7 @@ public sealed class SaleService : ISaleService
         return sale.ToResponse();
     }
 
-    public async Task<IReadOnlyCollection<SaleResponse>> GetByDateRangeAsync(DateRangeQuery query, CancellationToken cancellationToken = default)
+    public async Task<PagedResponse<SaleResponse>> GetByDateRangeAsync(DateRangeQuery query, PaginationQuery paginationQuery, CancellationToken cancellationToken = default)
     {
         if (query.From > query.To)
         {
@@ -119,30 +127,12 @@ public sealed class SaleService : ISaleService
 
         var fromUtc = query.From.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
         var toUtc = query.To.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
-        var sales = await _saleRepository.GetByDateRangeAsync(_userContext.BusinessId, fromUtc, toUtc, cancellationToken);
-        return sales.Select(sale => sale.ToResponse()).ToArray();
+        var sales = await _saleRepository.GetByDateRangePagedAsync(_userContext.BusinessId, fromUtc, toUtc, paginationQuery, cancellationToken);
+        return sales.ToPagedResponse(sale => sale.ToResponse());
     }
 
     private void ValidateProductAvailability(Product product, int quantity)
     {
-        if (quantity <= 0)
-        {
-            throw new ValidationDomainException("Sale item quantity must be greater than zero.");
-        }
-
-        if (!product.IsActive)
-        {
-            throw new ProductInactiveException($"Product '{product.Name}' is inactive and cannot be sold.");
-        }
-
-        if (product.IsExpired)
-        {
-            throw new ProductExpiredException($"Product '{product.Name}' is expired and cannot be sold.");
-        }
-
-        if (product.CurrentStock < quantity)
-        {
-            throw new InsufficientStockException($"Product '{product.Name}' does not have enough stock.");
-        }
+        product.EnsureCanBeSold(quantity, _dateTimeProvider.UtcNow);
     }
 }

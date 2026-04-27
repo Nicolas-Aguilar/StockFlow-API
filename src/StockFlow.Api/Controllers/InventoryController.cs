@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using StockFlow.Application.Common;
 using StockFlow.Application.DTOs.Inventory;
 using StockFlow.Application.Interfaces;
 
@@ -25,14 +26,14 @@ public sealed class InventoryController : ControllerBase
     }
 
     [HttpGet("movements")]
-    public async Task<ActionResult<IReadOnlyCollection<InventoryMovementResponse>>> GetMovements(CancellationToken cancellationToken)
+    public async Task<ActionResult<PagedResponse<InventoryMovementResponse>>> GetMovements([FromQuery] PaginationQuery paginationQuery, CancellationToken cancellationToken)
     {
-        return Ok(await _inventoryService.GetMovementsAsync(cancellationToken));
+        return Ok(await _inventoryService.GetMovementsAsync(paginationQuery, cancellationToken));
     }
 
     [HttpGet("products/{productId:guid}/history")]
-    public async Task<ActionResult<IReadOnlyCollection<InventoryMovementResponse>>> GetHistory(Guid productId, CancellationToken cancellationToken)
+    public async Task<ActionResult<PagedResponse<InventoryMovementResponse>>> GetHistory(Guid productId, [FromQuery] PaginationQuery paginationQuery, CancellationToken cancellationToken)
     {
-        return Ok(await _inventoryService.GetProductHistoryAsync(productId, cancellationToken));
+        return Ok(await _inventoryService.GetProductHistoryAsync(productId, paginationQuery, cancellationToken));
     }
 }

@@ -46,6 +46,8 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
+EnsureSecretConfigured("Jwt:Key", jwtOptions.Key);
+
 var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.Key));
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -80,6 +82,17 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+
+static void EnsureSecretConfigured(string settingName, string? value)
+{
+    if (!string.IsNullOrWhiteSpace(value) && !value.Contains("__SET_IN_USER_SECRETS_OR_ENV__", StringComparison.Ordinal))
+    {
+        return;
+    }
+
+    throw new InvalidOperationException(
+        $"Configuration '{settingName}' is not set. Configure local secrets with dotnet user-secrets or environment variables before starting StockFlow.");
+}
 
 app.Run();
 

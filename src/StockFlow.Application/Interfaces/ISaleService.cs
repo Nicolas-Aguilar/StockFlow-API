@@ -6,7 +6,7 @@ namespace StockFlow.Application.Interfaces;
 public interface ISaleService
 {
     Task<SaleResponse> CreateAsync(CreateSaleRequest request, CancellationToken cancellationToken = default);
-    Task<IReadOnlyCollection<SaleResponse>> GetAllAsync(CancellationToken cancellationToken = default);
+    Task<PagedResponse<SaleResponse>> GetAllAsync(PaginationQuery paginationQuery, CancellationToken cancellationToken = default);
     Task<SaleResponse> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
-    Task<IReadOnlyCollection<SaleResponse>> GetByDateRangeAsync(DateRangeQuery query, CancellationToken cancellationToken = default);
+    Task<PagedResponse<SaleResponse>> GetByDateRangeAsync(DateRangeQuery query, PaginationQuery paginationQuery, CancellationToken cancellationToken = default);
 }

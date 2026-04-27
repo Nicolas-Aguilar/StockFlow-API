@@ -21,30 +21,34 @@ public sealed class ReportService : IReportService
         _dateTimeProvider = dateTimeProvider;
     }
 
-    public async Task<IReadOnlyCollection<ProductResponse>> GetLowStockProductsAsync(CancellationToken cancellationToken = default)
+    public async Task<PagedResponse<ProductResponse>> GetLowStockProductsAsync(PaginationQuery paginationQuery, CancellationToken cancellationToken = default)
     {
-        return (await _productRepository.GetLowStockAsync(_userContext.BusinessId, cancellationToken)).Select(product => product.ToResponse()).ToArray();
+        var currentDateUtc = _dateTimeProvider.UtcNow;
+        return (await _productRepository.GetLowStockPagedAsync(_userContext.BusinessId, paginationQuery, cancellationToken)).ToPagedResponse(product => product.ToResponse(currentDateUtc));
     }
 
-    public async Task<IReadOnlyCollection<ProductResponse>> GetExpiringSoonProductsAsync(int days = 30, CancellationToken cancellationToken = default)
+    public async Task<PagedResponse<ProductResponse>> GetExpiringSoonProductsAsync(PaginationQuery paginationQuery, int days = 30, CancellationToken cancellationToken = default)
     {
         if (days <= 0)
         {
             throw new ValidationDomainException("The days parameter must be greater than zero.");
         }
 
-        var limitDate = _dateTimeProvider.UtcNow.Date.AddDays(days);
-        return (await _productRepository.GetExpiringSoonAsync(_userContext.BusinessId, limitDate, cancellationToken)).Select(product => product.ToResponse()).ToArray();
+        var currentDateUtc = _dateTimeProvider.UtcNow;
+        var limitDate = currentDateUtc.Date.AddDays(days);
+        return (await _productRepository.GetExpiringSoonPagedAsync(_userContext.BusinessId, currentDateUtc.Date, limitDate, paginationQuery, cancellationToken)).ToPagedResponse(product => product.ToResponse(currentDateUtc));
     }
 
-    public async Task<IReadOnlyCollection<ProductResponse>> GetExpiredProductsAsync(CancellationToken cancellationToken = default)
+    public async Task<PagedResponse<ProductResponse>> GetExpiredProductsAsync(PaginationQuery paginationQuery, CancellationToken cancellationToken = default)
     {
-        return (await _productRepository.GetExpiredAsync(_userContext.BusinessId, _dateTimeProvider.UtcNow.Date, cancellationToken)).Select(product => product.ToResponse()).ToArray();
+        var currentDateUtc = _dateTimeProvider.UtcNow;
+        return (await _productRepository.GetExpiredPagedAsync(_userContext.BusinessId, currentDateUtc.Date, paginationQuery, cancellationToken)).ToPagedResponse(product => product.ToResponse(currentDateUtc));
     }
 
-    public Task<IReadOnlyCollection<TopSellingProductResponse>> GetTopSellingProductsAsync(CancellationToken cancellationToken = default)
+    public async Task<PagedResponse<TopSellingProductResponse>> GetTopSellingProductsAsync(PaginationQuery paginationQuery, CancellationToken cancellationToken = default)
     {
-        return _saleRepository.GetTopSellingProductsAsync(_userContext.BusinessId, cancellationToken);
+        var products = await _saleRepository.GetTopSellingProductsPagedAsync(_userContext.BusinessId, paginationQuery, cancellationToken);
+        return products.ToPagedResponse(product => product);
     }
 
     public async Task<SalesSummaryResponse> GetSalesSummaryAsync(DateRangeQuery query, CancellationToken cancellationToken = default)

@@ -32,7 +32,18 @@ Thumbs.db
 # Environment
 .env
 .env.*
+!.env.example
+.env.local
+.envrc
+.direnv/
+
+# Local config and secrets
+appsettings.Local.json
+appsettings.*.local.json
+secrets.json
 
 # Data
 *.mdf
 *.ldf
+
+.AGENTS.md

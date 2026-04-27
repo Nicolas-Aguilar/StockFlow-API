@@ -25,68 +25,69 @@ public sealed class ProductService : IProductService
     {
         var category = await ValidateCategoryAsync(request.CategoryId, cancellationToken);
         await EnsureInternalCodeAvailableAsync(request.InternalCode, null, cancellationToken);
-        ValidateProductRules(request.PurchasePrice, request.SalePrice, request.CurrentStock, request.MinimumStock, request.ExpirationDate);
 
-        var product = new Product
-        {
-            BusinessId = _userContext.BusinessId,
-            CategoryId = request.CategoryId,
-            Name = request.Name.Trim(),
-            InternalCode = request.InternalCode.Trim(),
-            Description = request.Description?.Trim(),
-            PurchasePrice = request.PurchasePrice,
-            SalePrice = request.SalePrice,
-            CurrentStock = request.CurrentStock,
-            MinimumStock = request.MinimumStock,
-            ExpirationDate = request.ExpirationDate,
-            IsActive = true,
-            Category = category
-        };
+        var product = Product.Create(
+            _userContext.BusinessId,
+            request.CategoryId,
+            request.Name,
+            request.InternalCode,
+            request.Description,
+            request.PurchasePrice,
+            request.SalePrice,
+            request.CurrentStock,
+            request.MinimumStock,
+            request.ExpirationDate,
+            category);
 
         await _productRepository.AddAsync(product, cancellationToken);
         await _productRepository.SaveChangesAsync(cancellationToken);
-        return product.ToResponse();
+        return product.ToResponse(_dateTimeProvider.UtcNow);
     }
 
-    public async Task<IReadOnlyCollection<ProductResponse>> GetAllAsync(Guid? categoryId = null, CancellationToken cancellationToken = default)
+    public async Task<PagedResponse<ProductResponse>> GetAllAsync(PaginationQuery paginationQuery, Guid? categoryId = null, CancellationToken cancellationToken = default)
     {
-        var products = await _productRepository.GetAllAsync(_userContext.BusinessId, categoryId, cancellationToken);
-        return products.Select(product => product.ToResponse()).ToArray();
+        var products = await _productRepository.GetPagedAsync(_userContext.BusinessId, paginationQuery, categoryId, cancellationToken);
+        var currentDateUtc = _dateTimeProvider.UtcNow;
+        return products.ToPagedResponse(product => product.ToResponse(currentDateUtc));
     }
 
     public async Task<ProductResponse> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        return (await GetEntityAsync(id, cancellationToken)).ToResponse();
+        return (await GetEntityAsync(id, cancellationToken)).ToResponse(_dateTimeProvider.UtcNow);
     }
 
-    public async Task<IReadOnlyCollection<ProductResponse>> SearchAsync(string term, CancellationToken cancellationToken = default)
+    public async Task<PagedResponse<ProductResponse>> SearchAsync(string term, PaginationQuery paginationQuery, CancellationToken cancellationToken = default)
     {
-        var products = await _productRepository.SearchAsync(_userContext.BusinessId, term.Trim(), cancellationToken);
-        return products.Select(product => product.ToResponse()).ToArray();
+        var products = await _productRepository.SearchPagedAsync(_userContext.BusinessId, term.Trim(), paginationQuery, cancellationToken);
+        var currentDateUtc = _dateTimeProvider.UtcNow;
+        return products.ToPagedResponse(product => product.ToResponse(currentDateUtc));
     }
 
-    public async Task<IReadOnlyCollection<ProductResponse>> GetLowStockAsync(CancellationToken cancellationToken = default)
+    public async Task<PagedResponse<ProductResponse>> GetLowStockAsync(PaginationQuery paginationQuery, CancellationToken cancellationToken = default)
     {
-        var products = await _productRepository.GetLowStockAsync(_userContext.BusinessId, cancellationToken);
-        return products.Select(product => product.ToResponse()).ToArray();
+        var products = await _productRepository.GetLowStockPagedAsync(_userContext.BusinessId, paginationQuery, cancellationToken);
+        var currentDateUtc = _dateTimeProvider.UtcNow;
+        return products.ToPagedResponse(product => product.ToResponse(currentDateUtc));
     }
 
-    public async Task<IReadOnlyCollection<ProductResponse>> GetExpiringSoonAsync(int days = 30, CancellationToken cancellationToken = default)
+    public async Task<PagedResponse<ProductResponse>> GetExpiringSoonAsync(PaginationQuery paginationQuery, int days = 30, CancellationToken cancellationToken = default)
     {
         if (days <= 0)
         {
             throw new ValidationDomainException("The days parameter must be greater than zero.");
         }
 
-        var limitDate = _dateTimeProvider.UtcNow.Date.AddDays(days);
-        var products = await _productRepository.GetExpiringSoonAsync(_userContext.BusinessId, limitDate, cancellationToken);
-        return products.Select(product => product.ToResponse()).ToArray();
+        var currentDateUtc = _dateTimeProvider.UtcNow;
+        var limitDate = currentDateUtc.Date.AddDays(days);
+        var products = await _productRepository.GetExpiringSoonPagedAsync(_userContext.BusinessId, currentDateUtc.Date, limitDate, paginationQuery, cancellationToken);
+        return products.ToPagedResponse(product => product.ToResponse(currentDateUtc));
     }
 
-    public async Task<IReadOnlyCollection<ProductResponse>> GetExpiredAsync(CancellationToken cancellationToken = default)
+    public async Task<PagedResponse<ProductResponse>> GetExpiredAsync(PaginationQuery paginationQuery, CancellationToken cancellationToken = default)
     {
-        var products = await _productRepository.GetExpiredAsync(_userContext.BusinessId, _dateTimeProvider.UtcNow.Date, cancellationToken);
-        return products.Select(product => product.ToResponse()).ToArray();
+        var currentDateUtc = _dateTimeProvider.UtcNow;
+        var products = await _productRepository.GetExpiredPagedAsync(_userContext.BusinessId, currentDateUtc.Date, paginationQuery, cancellationToken);
+        return products.ToPagedResponse(product => product.ToResponse(currentDateUtc));
     }
 
     public async Task<ProductResponse> UpdateAsync(Guid id, UpdateProductRequest request, CancellationToken cancellationToken = default)
@@ -94,31 +95,32 @@ public sealed class ProductService : IProductService
         var product = await GetEntityAsync(id, cancellationToken);
         var category = await ValidateCategoryAsync(request.CategoryId, cancellationToken);
         await EnsureInternalCodeAvailableAsync(request.InternalCode, id, cancellationToken);
-        ValidateProductRules(request.PurchasePrice, request.SalePrice, product.CurrentStock, request.MinimumStock, request.ExpirationDate);
+        var updatedAtUtc = _dateTimeProvider.UtcNow;
 
-        product.CategoryId = request.CategoryId;
-        product.Name = request.Name.Trim();
-        product.InternalCode = request.InternalCode.Trim();
-        product.Description = request.Description?.Trim();
-        product.PurchasePrice = request.PurchasePrice;
-        product.SalePrice = request.SalePrice;
-        product.MinimumStock = request.MinimumStock;
-        product.ExpirationDate = request.ExpirationDate;
-        product.IsActive = request.IsActive;
-        product.Category = category;
-        product.UpdatedAt = _dateTimeProvider.UtcNow;
+        product.UpdateCatalogDetails(
+            request.CategoryId,
+            request.Name,
+            request.InternalCode,
+            request.Description,
+            request.PurchasePrice,
+            request.SalePrice,
+            request.MinimumStock,
+            request.ExpirationDate,
+            request.IsActive,
+            updatedAtUtc,
+            category);
 
         await _productRepository.SaveChangesAsync(cancellationToken);
-        return product.ToResponse();
+        return product.ToResponse(updatedAtUtc);
     }
 
     public async Task<ProductResponse> DeactivateAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var product = await GetEntityAsync(id, cancellationToken);
-        product.IsActive = false;
-        product.UpdatedAt = _dateTimeProvider.UtcNow;
+        var updatedAtUtc = _dateTimeProvider.UtcNow;
+        product.Deactivate(updatedAtUtc);
         await _productRepository.SaveChangesAsync(cancellationToken);
-        return product.ToResponse();
+        return product.ToResponse(updatedAtUtc);
     }
 
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
@@ -126,8 +128,7 @@ public sealed class ProductService : IProductService
         var product = await GetEntityAsync(id, cancellationToken);
         if (await _productRepository.HasHistoryAsync(id, _userContext.BusinessId, cancellationToken))
         {
-            product.IsActive = false;
-            product.UpdatedAt = _dateTimeProvider.UtcNow;
+            product.Deactivate(_dateTimeProvider.UtcNow);
         }
         else
         {
@@ -153,24 +154,6 @@ public sealed class ProductService : IProductService
         if (await _productRepository.ExistsInternalCodeAsync(_userContext.BusinessId, internalCode.Trim(), excludeId, cancellationToken))
         {
             throw new DuplicateInternalCodeException("The internal code already exists in this business.");
-        }
-    }
-
-    private static void ValidateProductRules(decimal purchasePrice, decimal salePrice, int currentStock, int minimumStock, DateTime? expirationDate)
-    {
-        if (salePrice < purchasePrice)
-        {
-            throw new ValidationDomainException("Sale price must be greater than or equal to purchase price.");
-        }
-
-        if (currentStock < 0 || minimumStock < 0)
-        {
-            throw new ValidationDomainException("Stock values cannot be negative.");
-        }
-
-        if (expirationDate.HasValue && expirationDate.Value.Year < 2000)
-        {
-            throw new ValidationDomainException("Expiration date is invalid.");
         }
     }
 

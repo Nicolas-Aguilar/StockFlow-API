@@ -41,13 +41,7 @@ public sealed class InventoryService : IInventoryService
             throw new ValidationDomainException("Reason is required for exit and adjustment movements.");
         }
 
-        if (request.MovementType != InventoryMovementType.Entry && product.CurrentStock < request.Quantity)
-        {
-            throw new InsufficientStockException("The product does not have enough stock.");
-        }
-
-        product.CurrentStock += request.MovementType == InventoryMovementType.Entry ? request.Quantity : -request.Quantity;
-        product.UpdatedAt = _dateTimeProvider.UtcNow;
+        product.ApplyInventoryMovement(request.MovementType, request.Quantity, _dateTimeProvider.UtcNow);
 
         var movement = new InventoryMovement
         {
@@ -65,15 +59,15 @@ public sealed class InventoryService : IInventoryService
         return movement.ToResponse();
     }
 
-    public async Task<IReadOnlyCollection<InventoryMovementResponse>> GetMovementsAsync(CancellationToken cancellationToken = default)
+    public async Task<PagedResponse<InventoryMovementResponse>> GetMovementsAsync(PaginationQuery paginationQuery, CancellationToken cancellationToken = default)
     {
-        var movements = await _inventoryMovementRepository.GetByBusinessAsync(_userContext.BusinessId, cancellationToken);
-        return movements.Select(movement => movement.ToResponse()).ToArray();
+        var movements = await _inventoryMovementRepository.GetByBusinessPagedAsync(_userContext.BusinessId, paginationQuery, cancellationToken);
+        return movements.ToPagedResponse(movement => movement.ToResponse());
     }
 
-    public async Task<IReadOnlyCollection<InventoryMovementResponse>> GetProductHistoryAsync(Guid productId, CancellationToken cancellationToken = default)
+    public async Task<PagedResponse<InventoryMovementResponse>> GetProductHistoryAsync(Guid productId, PaginationQuery paginationQuery, CancellationToken cancellationToken = default)
     {
-        var movements = await _inventoryMovementRepository.GetProductHistoryAsync(_userContext.BusinessId, productId, cancellationToken);
-        return movements.Select(movement => movement.ToResponse()).ToArray();
+        var movements = await _inventoryMovementRepository.GetProductHistoryPagedAsync(_userContext.BusinessId, productId, paginationQuery, cancellationToken);
+        return movements.ToPagedResponse(movement => movement.ToResponse());
     }
 }

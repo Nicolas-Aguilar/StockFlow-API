@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using StockFlow.Application.Common;
 using StockFlow.Application.DTOs.Products;
 using StockFlow.Application.Interfaces;
 
@@ -25,33 +26,33 @@ public sealed class ProductsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<IReadOnlyCollection<ProductResponse>>> GetAll([FromQuery] Guid? categoryId, CancellationToken cancellationToken)
+    public async Task<ActionResult<PagedResponse<ProductResponse>>> GetAll([FromQuery] PaginationQuery paginationQuery, [FromQuery] Guid? categoryId, CancellationToken cancellationToken)
     {
-        return Ok(await _productService.GetAllAsync(categoryId, cancellationToken));
+        return Ok(await _productService.GetAllAsync(paginationQuery, categoryId, cancellationToken));
     }
 
     [HttpGet("search")]
-    public async Task<ActionResult<IReadOnlyCollection<ProductResponse>>> Search([FromQuery] string term, CancellationToken cancellationToken)
+    public async Task<ActionResult<PagedResponse<ProductResponse>>> Search([FromQuery] string term, [FromQuery] PaginationQuery paginationQuery, CancellationToken cancellationToken)
     {
-        return Ok(await _productService.SearchAsync(term, cancellationToken));
+        return Ok(await _productService.SearchAsync(term, paginationQuery, cancellationToken));
     }
 
     [HttpGet("low-stock")]
-    public async Task<ActionResult<IReadOnlyCollection<ProductResponse>>> LowStock(CancellationToken cancellationToken)
+    public async Task<ActionResult<PagedResponse<ProductResponse>>> LowStock([FromQuery] PaginationQuery paginationQuery, CancellationToken cancellationToken)
     {
-        return Ok(await _productService.GetLowStockAsync(cancellationToken));
+        return Ok(await _productService.GetLowStockAsync(paginationQuery, cancellationToken));
     }
 
     [HttpGet("expiring-soon")]
-    public async Task<ActionResult<IReadOnlyCollection<ProductResponse>>> ExpiringSoon([FromQuery] int days = 30, CancellationToken cancellationToken = default)
+    public async Task<ActionResult<PagedResponse<ProductResponse>>> ExpiringSoon([FromQuery] PaginationQuery paginationQuery, [FromQuery] int days = 30, CancellationToken cancellationToken = default)
     {
-        return Ok(await _productService.GetExpiringSoonAsync(days, cancellationToken));
+        return Ok(await _productService.GetExpiringSoonAsync(paginationQuery, days, cancellationToken));
     }
 
     [HttpGet("expired")]
-    public async Task<ActionResult<IReadOnlyCollection<ProductResponse>>> Expired(CancellationToken cancellationToken)
+    public async Task<ActionResult<PagedResponse<ProductResponse>>> Expired([FromQuery] PaginationQuery paginationQuery, CancellationToken cancellationToken)
     {
-        return Ok(await _productService.GetExpiredAsync(cancellationToken));
+        return Ok(await _productService.GetExpiredAsync(paginationQuery, cancellationToken));
     }
 
     [HttpGet("{id:guid}")]

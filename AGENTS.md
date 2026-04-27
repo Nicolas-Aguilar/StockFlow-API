@@ -1389,7 +1389,7 @@ services:
     container_name: stockflow-sqlserver
     environment:
       ACCEPT_EULA: "Y"
-      SA_PASSWORD: "Your_password123"
+      SA_PASSWORD: "${SQLSERVER_SA_PASSWORD}"
     ports:
       - "1433:1433"
     volumes:
@@ -1402,16 +1402,16 @@ volumes:
 Cadena de conexión local esperada:
 
 ```text
-Server=localhost,1433;Database=StockFlowDb;User Id=sa;Password=Your_password123;TrustServerCertificate=True;
+Server=localhost,1433;Database=StockFlowDb;User Id=sa;Password=<local-secret>;TrustServerCertificate=True;
 ```
 
 Reglas:
 
-- La contraseña anterior es solo para desarrollo local.
-- No usar esta contraseña en producción.
+- La contraseña debe vivir fuera del repositorio, por ejemplo en `.env` para Docker y `dotnet user-secrets` para la API.
+- No reutilizar una contraseña local en producción.
 - No subir secretos reales.
 - Documentar cómo levantar SQL Server con Docker.
-- La API debe poder conectarse a SQL Server usando configuración desde `appsettings.Development.json` o variables de entorno.
+- La API debe poder conectarse a SQL Server usando `dotnet user-secrets` o variables de entorno.
 
 Comando esperado para levantar SQL Server:
 

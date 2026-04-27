@@ -16,7 +16,7 @@ public static class MappingExtensions
 
     public static CategoryResponse ToResponse(this Category category) => new(category.Id, category.BusinessId, category.Name, category.Description, category.IsActive, category.CreatedAt, category.UpdatedAt);
 
-    public static ProductResponse ToResponse(this Product product) => new(
+    public static ProductResponse ToResponse(this Product product, DateTime currentDateUtc) => new(
         product.Id,
         product.BusinessId,
         product.CategoryId,
@@ -32,8 +32,8 @@ public static class MappingExtensions
         product.MinimumStock,
         product.IsLowStock,
         product.ExpirationDate,
-        product.IsExpired,
-        product.DaysUntilExpiration,
+        product.IsExpiredAt(currentDateUtc),
+        product.GetDaysUntilExpiration(currentDateUtc),
         product.IsActive,
         product.CreatedAt,
         product.UpdatedAt);
@@ -63,4 +63,14 @@ public static class MappingExtensions
             item.UnitPurchasePrice,
             item.Subtotal,
             item.EstimatedProfit)).ToArray());
+
+    public static PagedResponse<TDestination> ToPagedResponse<TSource, TDestination>(
+        this PagedResult<TSource> result,
+        Func<TSource, TDestination> map)
+        => new(
+            result.Items.Select(map).ToArray(),
+            result.Page,
+            result.PageSize,
+            result.TotalItems,
+            result.TotalPages);
 }

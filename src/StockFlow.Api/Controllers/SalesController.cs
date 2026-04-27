@@ -26,9 +26,9 @@ public sealed class SalesController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<IReadOnlyCollection<SaleResponse>>> GetAll(CancellationToken cancellationToken)
+    public async Task<ActionResult<PagedResponse<SaleResponse>>> GetAll([FromQuery] PaginationQuery paginationQuery, CancellationToken cancellationToken)
     {
-        return Ok(await _saleService.GetAllAsync(cancellationToken));
+        return Ok(await _saleService.GetAllAsync(paginationQuery, cancellationToken));
     }
 
     [HttpGet("{id:guid}")]
@@ -38,8 +38,8 @@ public sealed class SalesController : ControllerBase
     }
 
     [HttpGet("by-date")]
-    public async Task<ActionResult<IReadOnlyCollection<SaleResponse>>> GetByDate([FromQuery] DateOnly from, [FromQuery] DateOnly to, CancellationToken cancellationToken)
+    public async Task<ActionResult<PagedResponse<SaleResponse>>> GetByDate([FromQuery] DateOnly from, [FromQuery] DateOnly to, [FromQuery] PaginationQuery paginationQuery, CancellationToken cancellationToken)
     {
-        return Ok(await _saleService.GetByDateRangeAsync(new DateRangeQuery { From = from, To = to }, cancellationToken));
+        return Ok(await _saleService.GetByDateRangeAsync(new DateRangeQuery { From = from, To = to }, paginationQuery, cancellationToken));
     }
 }

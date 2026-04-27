@@ -20,27 +20,27 @@ public sealed class ReportsController : ControllerBase
     }
 
     [HttpGet("low-stock")]
-    public async Task<ActionResult<IReadOnlyCollection<ProductResponse>>> LowStock(CancellationToken cancellationToken)
+    public async Task<ActionResult<PagedResponse<ProductResponse>>> LowStock([FromQuery] PaginationQuery paginationQuery, CancellationToken cancellationToken)
     {
-        return Ok(await _reportService.GetLowStockProductsAsync(cancellationToken));
+        return Ok(await _reportService.GetLowStockProductsAsync(paginationQuery, cancellationToken));
     }
 
     [HttpGet("expiring-soon")]
-    public async Task<ActionResult<IReadOnlyCollection<ProductResponse>>> ExpiringSoon([FromQuery] int days = 30, CancellationToken cancellationToken = default)
+    public async Task<ActionResult<PagedResponse<ProductResponse>>> ExpiringSoon([FromQuery] PaginationQuery paginationQuery, [FromQuery] int days = 30, CancellationToken cancellationToken = default)
     {
-        return Ok(await _reportService.GetExpiringSoonProductsAsync(days, cancellationToken));
+        return Ok(await _reportService.GetExpiringSoonProductsAsync(paginationQuery, days, cancellationToken));
     }
 
     [HttpGet("expired-products")]
-    public async Task<ActionResult<IReadOnlyCollection<ProductResponse>>> ExpiredProducts(CancellationToken cancellationToken)
+    public async Task<ActionResult<PagedResponse<ProductResponse>>> ExpiredProducts([FromQuery] PaginationQuery paginationQuery, CancellationToken cancellationToken)
     {
-        return Ok(await _reportService.GetExpiredProductsAsync(cancellationToken));
+        return Ok(await _reportService.GetExpiredProductsAsync(paginationQuery, cancellationToken));
     }
 
     [HttpGet("top-selling-products")]
-    public async Task<ActionResult<IReadOnlyCollection<TopSellingProductResponse>>> TopSellingProducts(CancellationToken cancellationToken)
+    public async Task<ActionResult<PagedResponse<TopSellingProductResponse>>> TopSellingProducts([FromQuery] PaginationQuery paginationQuery, CancellationToken cancellationToken)
     {
-        return Ok(await _reportService.GetTopSellingProductsAsync(cancellationToken));
+        return Ok(await _reportService.GetTopSellingProductsAsync(paginationQuery, cancellationToken));
     }
 
     [HttpGet("sales-summary")]

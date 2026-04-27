@@ -5,9 +5,9 @@ services:
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_PID: "Developer"
-      SA_PASSWORD: "Your_password123"
+      SA_PASSWORD: "${SQLSERVER_SA_PASSWORD:?Set SQLSERVER_SA_PASSWORD in .env}"
     ports:
-      - "1433:1433"
+      - "${SQLSERVER_SQL_PORT:-1433}:1433"
     volumes:
       - stockflow_sqlserver_data:/var/opt/mssql
     healthcheck:

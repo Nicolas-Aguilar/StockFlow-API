@@ -6,10 +6,10 @@ namespace StockFlow.Application.Interfaces;
 
 public interface IReportService
 {
-    Task<IReadOnlyCollection<ProductResponse>> GetLowStockProductsAsync(CancellationToken cancellationToken = default);
-    Task<IReadOnlyCollection<ProductResponse>> GetExpiringSoonProductsAsync(int days = 30, CancellationToken cancellationToken = default);
-    Task<IReadOnlyCollection<ProductResponse>> GetExpiredProductsAsync(CancellationToken cancellationToken = default);
-    Task<IReadOnlyCollection<TopSellingProductResponse>> GetTopSellingProductsAsync(CancellationToken cancellationToken = default);
+    Task<PagedResponse<ProductResponse>> GetLowStockProductsAsync(PaginationQuery paginationQuery, CancellationToken cancellationToken = default);
+    Task<PagedResponse<ProductResponse>> GetExpiringSoonProductsAsync(PaginationQuery paginationQuery, int days = 30, CancellationToken cancellationToken = default);
+    Task<PagedResponse<ProductResponse>> GetExpiredProductsAsync(PaginationQuery paginationQuery, CancellationToken cancellationToken = default);
+    Task<PagedResponse<TopSellingProductResponse>> GetTopSellingProductsAsync(PaginationQuery paginationQuery, CancellationToken cancellationToken = default);
     Task<SalesSummaryResponse> GetSalesSummaryAsync(DateRangeQuery query, CancellationToken cancellationToken = default);
     Task<ProfitSummaryResponse> GetProfitSummaryAsync(DateRangeQuery query, CancellationToken cancellationToken = default);
     Task<InventoryValuationResponse> GetInventoryValuationAsync(CancellationToken cancellationToken = default);

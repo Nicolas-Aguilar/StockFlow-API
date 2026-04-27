@@ -14,6 +14,9 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
+        var connectionString = configuration.GetConnectionString("DefaultConnection");
+        EnsureSecretConfigured("ConnectionStrings:DefaultConnection", connectionString);
+
         var jwtSection = configuration.GetSection(JwtOptions.SectionName);
         var jwtOptions = new JwtOptions
         {
@@ -25,7 +28,7 @@ public static class DependencyInjection
         services.AddSingleton(Options.Create(jwtOptions));
 
         services.AddDbContext<AppDbContext>(options =>
-            options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
+            options.UseSqlServer(connectionString));
 
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IBusinessRepository, BusinessRepository>();
@@ -47,5 +50,16 @@ public static class DependencyInjection
         services.AddScoped<IReportService, ReportService>();
 
         return services;
+    }
+
+    private static void EnsureSecretConfigured(string settingName, string? value)
+    {
+        if (!string.IsNullOrWhiteSpace(value) && !value.Contains("__SET_IN_USER_SECRETS_OR_ENV__", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"Configuration '{settingName}' is not set. Configure local secrets with dotnet user-secrets or environment variables before running StockFlow.");
     }
 }
