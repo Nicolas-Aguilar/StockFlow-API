@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using StockFlow.Application.Common;
+using StockFlow.Application.DTOs.Reports;
 using StockFlow.Application.Interfaces;
 using StockFlow.Domain.Entities;
 using StockFlow.Infrastructure.Data;
@@ -84,6 +85,20 @@ public sealed class ProductRepository : IProductRepository
 
     public Task<PagedResult<Product>> GetExpiredPagedAsync(Guid businessId, DateTime currentDateUtc, PaginationQuery paginationQuery, CancellationToken cancellationToken = default)
         => ToPagedResultAsync(GetExpiredQuery(businessId, currentDateUtc), paginationQuery, cancellationToken);
+
+    public async Task<InventoryValuationTotalsResponse> GetInventoryValuationTotalsAsync(Guid businessId, CancellationToken cancellationToken = default)
+    {
+        var aggregate = await _dbContext.Products
+            .Where(product => product.BusinessId == businessId)
+            .GroupBy(_ => 1)
+            .Select(group => new InventoryValuationTotalsResponse(
+                group.Count(),
+                group.Sum(product => product.CurrentStock * product.PurchasePrice),
+                group.Sum(product => product.CurrentStock * product.SalePrice)))
+            .SingleOrDefaultAsync(cancellationToken);
+
+        return aggregate ?? new InventoryValuationTotalsResponse(0, 0m, 0m);
+    }
 
     private IQueryable<Product> GetExpiredQuery(Guid businessId, DateTime currentDateUtc)
         => GetQuery(businessId).Where(product => product.ExpirationDate.HasValue && product.ExpirationDate.Value.Date < currentDateUtc.Date).OrderBy(product => product.ExpirationDate).ThenBy(product => product.Name).ThenBy(product => product.Id);

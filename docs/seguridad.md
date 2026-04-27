@@ -15,12 +15,14 @@
 ## Aislamiento de negocio
 
 - `HttpUserContext` resuelve el negocio autenticado desde claims.
+- Si `userId` o `businessId` faltan o son invalidos, la API corta la solicitud con `401 Unauthorized`.
 - Los servicios usan ese contexto para toda consulta operativa.
 - Las pruebas de integracion validan acceso denegado entre negocios.
 
 ## Manejo de errores
 
-- `ExceptionHandlingMiddleware` transforma errores de dominio en codigos HTTP controlados.
+- `ExceptionHandlingMiddleware` transforma errores de dominio y de contexto autenticado en `ProblemDetails` / `ValidationProblemDetails`.
+- Todas las respuestas de error controladas incluyen `traceId`.
 - No se devuelve stack trace al cliente.
 
 ## Configuracion

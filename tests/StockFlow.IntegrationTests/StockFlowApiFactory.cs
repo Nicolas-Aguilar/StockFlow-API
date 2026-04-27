@@ -4,6 +4,10 @@ using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
 using DotNet.Testcontainers.Builders;
 using Respawn;
 using Respawn.Graph;
@@ -85,6 +89,18 @@ public sealed class StockFlowApiFactory : WebApplicationFactory<Program>, IAsync
         await using var connection = new SqlConnection(_connectionString);
         await connection.OpenAsync();
         await _respawner.ResetAsync(connection);
+    }
+
+    public string CreateToken(IEnumerable<Claim>? claims = null, DateTime? expiresAtUtc = null)
+    {
+        var token = new JwtSecurityToken(
+            issuer: JwtIssuer,
+            audience: JwtAudience,
+            claims: claims,
+            expires: expiresAtUtc ?? DateTime.UtcNow.AddMinutes(30),
+            signingCredentials: new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtKey)), SecurityAlgorithms.HmacSha256));
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
     async Task IAsyncLifetime.DisposeAsync()

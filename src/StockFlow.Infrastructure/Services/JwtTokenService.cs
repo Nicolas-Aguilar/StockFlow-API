@@ -10,15 +10,17 @@ namespace StockFlow.Infrastructure.Services;
 public sealed class JwtTokenService : ITokenService
 {
     private readonly JwtOptions _options;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
-    public JwtTokenService(IOptions<JwtOptions> options)
+    public JwtTokenService(IOptions<JwtOptions> options, IDateTimeProvider dateTimeProvider)
     {
         _options = options.Value;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     public (string Token, DateTime ExpiresAtUtc) GenerateToken(Guid userId, Guid businessId, string email)
     {
-        var expires = DateTime.UtcNow.AddMinutes(_options.ExpirationMinutes);
+        var expires = _dateTimeProvider.UtcNow.AddMinutes(_options.ExpirationMinutes);
         var credentials = new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_options.Key)), SecurityAlgorithms.HmacSha256);
         var claims = new List<Claim>
         {

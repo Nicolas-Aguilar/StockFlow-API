@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using StockFlow.Application.Common;
 using StockFlow.Application.Interfaces;
 using StockFlow.Domain.Entities;
 using StockFlow.Infrastructure.Data;
@@ -13,7 +14,17 @@ public sealed class CategoryRepository : ICategoryRepository
 
     public Task AddAsync(Category category, CancellationToken cancellationToken = default) => _dbContext.Categories.AddAsync(category, cancellationToken).AsTask();
 
-    public async Task<IReadOnlyCollection<Category>> GetAllAsync(Guid businessId, CancellationToken cancellationToken = default) => await _dbContext.Categories.Where(category => category.BusinessId == businessId).OrderBy(category => category.Name).ToArrayAsync(cancellationToken);
+    public async Task<PagedResult<Category>> GetPagedAsync(Guid businessId, PaginationQuery paginationQuery, CancellationToken cancellationToken = default)
+    {
+        var query = _dbContext.Categories
+            .Where(category => category.BusinessId == businessId)
+            .OrderBy(category => category.Name)
+            .ThenBy(category => category.Id);
+
+        var totalItems = await query.CountAsync(cancellationToken);
+        var items = await query.Skip(paginationQuery.Skip).Take(paginationQuery.PageSize).ToArrayAsync(cancellationToken);
+        return new PagedResult<Category>(items, paginationQuery.Page, paginationQuery.PageSize, totalItems);
+    }
 
     public Task<Category?> GetByIdAsync(Guid id, Guid businessId, CancellationToken cancellationToken = default) => _dbContext.Categories.FirstOrDefaultAsync(category => category.Id == id && category.BusinessId == businessId, cancellationToken);
 

@@ -9,7 +9,7 @@ public sealed class Sale : Entity
     public decimal Total { get; set; }
     public decimal EstimatedProfit { get; set; }
     public PaymentMethod PaymentMethod { get; set; }
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; }
 
     public Business? Business { get; set; }
     public ICollection<SaleItem> Items { get; set; } = new List<SaleItem>();

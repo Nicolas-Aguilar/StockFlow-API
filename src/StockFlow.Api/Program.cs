@@ -1,5 +1,6 @@
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using StockFlow.Application.Interfaces;
@@ -14,7 +15,19 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IUserContext, HttpUserContext>();
 builder.Services.AddInfrastructure(builder.Configuration);
 
-builder.Services.AddControllers();
+builder.Services
+    .AddControllers()
+    .ConfigureApiBehaviorOptions(options =>
+    {
+        options.InvalidModelStateResponseFactory = context =>
+        {
+            var problemDetails = context.HttpContext.CreateValidationProblemDetails(context.ModelState, "The request payload is invalid.");
+            return new BadRequestObjectResult(problemDetails)
+            {
+                ContentTypes = { "application/problem+json" }
+            };
+        };
+    });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -63,6 +76,37 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidAudience = jwtOptions.Audience,
             IssuerSigningKey = key,
             ClockSkew = TimeSpan.Zero
+        };
+
+        options.Events = new JwtBearerEvents
+        {
+            OnChallenge = async context =>
+            {
+                context.HandleResponse();
+
+                if (context.Response.HasStarted)
+                {
+                    return;
+                }
+
+                var problemDetails = context.HttpContext.CreateProblemDetails(
+                    StatusCodes.Status401Unauthorized,
+                    "Unauthorized",
+                    "Authentication is required to access this resource.",
+                    "unauthorized");
+
+                await context.HttpContext.WriteProblemDetailsAsync(problemDetails);
+            },
+            OnForbidden = context =>
+            {
+                var problemDetails = context.HttpContext.CreateProblemDetails(
+                    StatusCodes.Status403Forbidden,
+                    "Forbidden",
+                    "You do not have permission to access this resource.",
+                    "forbidden");
+
+                return context.HttpContext.WriteProblemDetailsAsync(problemDetails);
+            }
         };
     });
 

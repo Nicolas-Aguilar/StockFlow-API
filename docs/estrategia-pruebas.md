@@ -11,10 +11,14 @@
 - calculo de campos derivados de producto
 - validacion de rango de fechas
 - rechazo de endpoints privados sin token
+- contrato de errores con `ProblemDetails`, `traceId` y rechazo de claims faltantes o invalidos
 - registro y consulta del usuario autenticado sin exponer `PasswordHash`
 - flujo de venta con descuento de stock e historial de inventario
 - rechazo de venta con stock insuficiente sin persistir venta ni movimientos
 - concurrencia de ventas sobre el mismo producto sin sobreventa
+- paginacion de categorias y validacion de busqueda vacia
+- concurrencia y semantica de inventario manual `Exit` / `Adjustment`
+- resumenes y valoracion de reportes verificados contra respuestas observables
 - aislamiento por `BusinessId` entre negocios
 
 ## Comandos
@@ -30,5 +34,4 @@ Requisito para integracion:
 ## Gaps conocidos
 
 - faltan pruebas dedicadas para duplicidad de `InternalCode`
-- faltan pruebas especificas para inventario manual `Exit` y `Adjustment`
-- faltan pruebas para todos los reportes con datos variados
+- faltan escenarios adicionales de reportes con multiples productos, fechas y empates de ventas

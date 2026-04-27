@@ -58,7 +58,14 @@ public sealed class ProductService : IProductService
 
     public async Task<PagedResponse<ProductResponse>> SearchAsync(string term, PaginationQuery paginationQuery, CancellationToken cancellationToken = default)
     {
-        var products = await _productRepository.SearchPagedAsync(_userContext.BusinessId, term.Trim(), paginationQuery, cancellationToken);
+        var normalizedTerm = term.Trim();
+
+        if (string.IsNullOrWhiteSpace(normalizedTerm))
+        {
+            throw new ValidationDomainException("The search term must not be blank.");
+        }
+
+        var products = await _productRepository.SearchPagedAsync(_userContext.BusinessId, normalizedTerm, paginationQuery, cancellationToken);
         var currentDateUtc = _dateTimeProvider.UtcNow;
         return products.ToPagedResponse(product => product.ToResponse(currentDateUtc));
     }

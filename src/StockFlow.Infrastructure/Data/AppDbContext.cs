@@ -1,12 +1,17 @@
 using Microsoft.EntityFrameworkCore;
+using StockFlow.Application.Interfaces;
+using StockFlow.Domain.Common;
 using StockFlow.Domain.Entities;
 
 namespace StockFlow.Infrastructure.Data;
 
 public sealed class AppDbContext : DbContext
 {
-    public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
+    private readonly IDateTimeProvider _dateTimeProvider;
+
+    public AppDbContext(DbContextOptions<AppDbContext> options, IDateTimeProvider dateTimeProvider) : base(options)
     {
+        _dateTimeProvider = dateTimeProvider;
     }
 
     public DbSet<User> Users => Set<User>();
@@ -25,18 +30,37 @@ public sealed class AppDbContext : DbContext
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
-        var entries = ChangeTracker.Entries<StockFlow.Domain.Common.AuditableEntity>()
+        var utcNow = _dateTimeProvider.UtcNow;
+
+        var entries = ChangeTracker.Entries<AuditableEntity>()
             .Where(entry => entry.State is EntityState.Added or EntityState.Modified);
 
         foreach (var entry in entries)
         {
-            entry.Entity.UpdatedAt = DateTime.UtcNow;
+            entry.Entity.UpdatedAt = utcNow;
             if (entry.State == EntityState.Added)
             {
-                entry.Entity.CreatedAt = DateTime.UtcNow;
+                entry.Entity.CreatedAt = utcNow;
             }
         }
 
+        SetCreatedAtIfMissing(ChangeTracker.Entries<Sale>(), utcNow);
+        SetCreatedAtIfMissing(ChangeTracker.Entries<InventoryMovement>(), utcNow);
+
         return base.SaveChangesAsync(cancellationToken);
+    }
+
+    private static void SetCreatedAtIfMissing<T>(IEnumerable<Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry<T>> entries, DateTime utcNow)
+        where T : class
+    {
+        foreach (var entry in entries.Where(entry => entry.State == EntityState.Added))
+        {
+            var createdAtProperty = entry.Property(nameof(Sale.CreatedAt));
+
+            if (createdAtProperty.CurrentValue is DateTime createdAt && createdAt == default)
+            {
+                createdAtProperty.CurrentValue = utcNow;
+            }
+        }
     }
 }

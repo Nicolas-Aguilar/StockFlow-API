@@ -1,5 +1,7 @@
 # StockFlow API
 
+[![CI](https://github.com/Nicolas-Aguilar/StockFlow-API/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Nicolas-Aguilar/StockFlow-API/actions/workflows/ci.yml)
+
 StockFlow API es una API REST en ASP.NET Core Web API orientada a un caso de negocio real: ayudar a un pequeno comercio a controlar catalogo, inventario, ventas, caducidad y reportes operativos sin sacrificar seguridad, reglas de negocio ni mantenibilidad.
 
 Es un proyecto pensado tanto para uso local y aprendizaje practico como para portafolio backend: arquitectura por capas, autenticacion JWT, EF Core con SQL Server, Swagger, pruebas automatizadas y documentacion tecnica consistente.
@@ -85,16 +87,20 @@ Proyectos incluidos:
 - Auth: `register`, `login`, `me`
 - Business: `GET/PUT /api/businesses/me`
 - Categories: crear, listar, consultar, actualizar y desactivar
+- Categories: crear, listar, consultar, actualizar y desactivar con respuesta paginada en `GET /api/categories`
 - Products: crear, listar, consultar, buscar, stock bajo, proximos a caducar, caducados, actualizar, desactivar y eliminar segun historial
 - Inventory: movimientos manuales, listado e historial por producto
+- Inventory: `Entry` suma stock; `Exit` y `Adjustment` descuentan stock con motivo obligatorio y proteccion atomica contra sobre-deduccion concurrente
 - Sales: creacion transaccional, consulta general, por id y por rango de fechas
 - Reports: bajo stock, proximos a caducar, caducados, mas vendidos, resumen de ventas, resumen de ganancias y valoracion de inventario
+- Reports: resumenes e inventario valorado calculados en base de datos para evitar cargas innecesarias en memoria
 
 ## Reglas backend destacadas
 
 - Todo dato operativo usa `BusinessId`
 - Ninguna consulta operativa busca solo por `Id`; tambien valida `BusinessId`
 - La API responde con DTOs; no expone entidades directamente
+- La API usa `ProblemDetails` y `ValidationProblemDetails` con `traceId` para errores de autenticacion, validacion, negocio y fallos inesperados
 - Las ventas calculan total y ganancia en backend
 - Cada venta descuenta stock y crea `InventoryMovement` tipo `Sale` dentro de una transaccion
 - Un producto con historial no se elimina fisicamente: se desactiva
@@ -241,6 +247,6 @@ dotnet test StockFlow.sln
 ## Proximos pasos razonables
 
 - ampliar cobertura automatizada en reportes e inventario manual
-- endurecer validaciones de entrada con una capa dedicada si el dominio sigue creciendo
+- seguir ampliando cobertura de escenarios de reportes y bordes de negocio si se agregan filtros nuevos
 - agregar ejemplos HTTP completos y capturas de Swagger para reforzar el enfoque de portafolio
 - incorporar seeds opcionales de demo para acelerar revisiones funcionales

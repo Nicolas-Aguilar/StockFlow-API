@@ -46,4 +46,4 @@ secrets.json
 *.mdf
 *.ldf
 
-.AGENTS.md
+AGENTS.md

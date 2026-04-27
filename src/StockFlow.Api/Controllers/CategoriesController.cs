@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using StockFlow.Application.Common;
 using StockFlow.Application.DTOs.Categories;
 using StockFlow.Application.Interfaces;
 
@@ -25,9 +26,9 @@ public sealed class CategoriesController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<IReadOnlyCollection<CategoryResponse>>> GetAll(CancellationToken cancellationToken)
+    public async Task<ActionResult<PagedResponse<CategoryResponse>>> GetAll([FromQuery] PaginationQuery paginationQuery, CancellationToken cancellationToken)
     {
-        return Ok(await _categoryService.GetAllAsync(cancellationToken));
+        return Ok(await _categoryService.GetAllAsync(paginationQuery, cancellationToken));
     }
 
     [HttpGet("{id:guid}")]

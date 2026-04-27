@@ -9,11 +9,13 @@ public sealed class BusinessService : IBusinessService
 {
     private readonly IBusinessRepository _businessRepository;
     private readonly IUserContext _userContext;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
-    public BusinessService(IBusinessRepository businessRepository, IUserContext userContext)
+    public BusinessService(IBusinessRepository businessRepository, IUserContext userContext, IDateTimeProvider dateTimeProvider)
     {
         _businessRepository = businessRepository;
         _userContext = userContext;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     public async Task<BusinessResponse> GetMyBusinessAsync(CancellationToken cancellationToken = default)
@@ -27,7 +29,7 @@ public sealed class BusinessService : IBusinessService
         var business = await GetCurrentBusinessAsync(cancellationToken);
         business.Name = request.Name.Trim();
         business.Description = request.Description?.Trim();
-        business.UpdatedAt = DateTime.UtcNow;
+        business.UpdatedAt = _dateTimeProvider.UtcNow;
         await _businessRepository.SaveChangesAsync(cancellationToken);
         return business.ToResponse();
     }

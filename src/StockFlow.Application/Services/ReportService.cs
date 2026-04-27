@@ -54,23 +54,21 @@ public sealed class ReportService : IReportService
     public async Task<SalesSummaryResponse> GetSalesSummaryAsync(DateRangeQuery query, CancellationToken cancellationToken = default)
     {
         ValidateDateRange(query);
-        var sales = await _saleRepository.GetByDateRangeAsync(_userContext.BusinessId, query.From.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc), query.To.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc), cancellationToken);
-        return new SalesSummaryResponse(query.From, query.To, sales.Count, sales.Sum(sale => sale.Total));
+        var totals = await _saleRepository.GetSalesTotalsByDateRangeAsync(_userContext.BusinessId, query.From.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc), query.To.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc), cancellationToken);
+        return new SalesSummaryResponse(query.From, query.To, totals.TotalSales, totals.TotalAmount);
     }
 
     public async Task<ProfitSummaryResponse> GetProfitSummaryAsync(DateRangeQuery query, CancellationToken cancellationToken = default)
     {
         ValidateDateRange(query);
-        var sales = await _saleRepository.GetByDateRangeAsync(_userContext.BusinessId, query.From.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc), query.To.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc), cancellationToken);
-        return new ProfitSummaryResponse(query.From, query.To, sales.Count, sales.Sum(sale => sale.EstimatedProfit));
+        var totals = await _saleRepository.GetProfitTotalsByDateRangeAsync(_userContext.BusinessId, query.From.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc), query.To.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc), cancellationToken);
+        return new ProfitSummaryResponse(query.From, query.To, totals.TotalSales, totals.EstimatedProfit);
     }
 
     public async Task<InventoryValuationResponse> GetInventoryValuationAsync(CancellationToken cancellationToken = default)
     {
-        var products = await _productRepository.GetAllAsync(_userContext.BusinessId, null, cancellationToken);
-        var purchaseValue = products.Sum(product => product.CurrentStock * product.PurchasePrice);
-        var saleValue = products.Sum(product => product.CurrentStock * product.SalePrice);
-        return new InventoryValuationResponse(products.Count, purchaseValue, saleValue, saleValue - purchaseValue);
+        var totals = await _productRepository.GetInventoryValuationTotalsAsync(_userContext.BusinessId, cancellationToken);
+        return new InventoryValuationResponse(totals.TotalProducts, totals.PurchaseValue, totals.PotentialSaleValue, totals.PotentialSaleValue - totals.PurchaseValue);
     }
 
     private static void ValidateDateRange(DateRangeQuery query)

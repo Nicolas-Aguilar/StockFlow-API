@@ -27,6 +27,28 @@ public sealed class SaleRepository : ISaleRepository
     public Task<PagedResult<Sale>> GetByDateRangePagedAsync(Guid businessId, DateTime fromUtc, DateTime toUtc, PaginationQuery paginationQuery, CancellationToken cancellationToken = default)
         => ToPagedResultAsync(GetSalesByDateRangeQuery(businessId, fromUtc, toUtc), paginationQuery, cancellationToken);
 
+    public async Task<SalesTotalsResponse> GetSalesTotalsByDateRangeAsync(Guid businessId, DateTime fromUtc, DateTime toUtc, CancellationToken cancellationToken = default)
+    {
+        var aggregate = await _dbContext.Sales
+            .Where(sale => sale.BusinessId == businessId && sale.CreatedAt >= fromUtc && sale.CreatedAt <= toUtc)
+            .GroupBy(_ => 1)
+            .Select(group => new SalesTotalsResponse(group.Count(), group.Sum(sale => sale.Total)))
+            .SingleOrDefaultAsync(cancellationToken);
+
+        return aggregate ?? new SalesTotalsResponse(0, 0m);
+    }
+
+    public async Task<ProfitTotalsResponse> GetProfitTotalsByDateRangeAsync(Guid businessId, DateTime fromUtc, DateTime toUtc, CancellationToken cancellationToken = default)
+    {
+        var aggregate = await _dbContext.Sales
+            .Where(sale => sale.BusinessId == businessId && sale.CreatedAt >= fromUtc && sale.CreatedAt <= toUtc)
+            .GroupBy(_ => 1)
+            .Select(group => new ProfitTotalsResponse(group.Count(), group.Sum(sale => sale.EstimatedProfit)))
+            .SingleOrDefaultAsync(cancellationToken);
+
+        return aggregate ?? new ProfitTotalsResponse(0, 0m);
+    }
+
     public async Task<IReadOnlyCollection<TopSellingProductResponse>> GetTopSellingProductsAsync(Guid businessId, CancellationToken cancellationToken = default)
     {
         return await GetTopSellingProductsQuery(businessId).Take(10).ToArrayAsync(cancellationToken);

@@ -14,7 +14,7 @@
 ## Categories
 
 - `POST /api/categories`
-- `GET /api/categories`
+- `GET /api/categories?page=1&pageSize=20`
 - `GET /api/categories/{id}`
 - `PUT /api/categories/{id}`
 - `PATCH /api/categories/{id}/deactivate`
@@ -61,6 +61,13 @@
 - `page` debe ser mayor o igual a `1`.
 - `pageSize` debe estar entre `1` y `100`.
 - Los endpoints agregados (`sales-summary`, `profit-summary`, `inventory-valuation`) mantienen su respuesta actual sin envoltura paginada.
+
+## Contrato de errores
+
+- Los errores controlados usan `application/problem+json`.
+- Siempre incluyen `type`, `title`, `status`, `detail` y `traceId`.
+- Los errores de validacion usan `ValidationProblemDetails`.
+- Claims faltantes o invalidos en un JWT autenticado responden `401 Unauthorized`; ya no caen en `Guid.Empty`.
 
 ## Autenticacion
 

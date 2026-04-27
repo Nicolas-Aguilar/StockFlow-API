@@ -10,11 +10,13 @@ public sealed class CategoryService : ICategoryService
 {
     private readonly ICategoryRepository _categoryRepository;
     private readonly IUserContext _userContext;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
-    public CategoryService(ICategoryRepository categoryRepository, IUserContext userContext)
+    public CategoryService(ICategoryRepository categoryRepository, IUserContext userContext, IDateTimeProvider dateTimeProvider)
     {
         _categoryRepository = categoryRepository;
         _userContext = userContext;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     public async Task<CategoryResponse> CreateAsync(CreateCategoryRequest request, CancellationToken cancellationToken = default)
@@ -33,10 +35,10 @@ public sealed class CategoryService : ICategoryService
         return category.ToResponse();
     }
 
-    public async Task<IReadOnlyCollection<CategoryResponse>> GetAllAsync(CancellationToken cancellationToken = default)
+    public async Task<PagedResponse<CategoryResponse>> GetAllAsync(PaginationQuery paginationQuery, CancellationToken cancellationToken = default)
     {
-        var categories = await _categoryRepository.GetAllAsync(_userContext.BusinessId, cancellationToken);
-        return categories.Select(category => category.ToResponse()).ToArray();
+        var categories = await _categoryRepository.GetPagedAsync(_userContext.BusinessId, paginationQuery, cancellationToken);
+        return categories.ToPagedResponse(category => category.ToResponse());
     }
 
     public async Task<CategoryResponse> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
@@ -51,7 +53,7 @@ public sealed class CategoryService : ICategoryService
         await EnsureNameAvailableAsync(request.Name, id, cancellationToken);
         category.Name = request.Name.Trim();
         category.Description = request.Description?.Trim();
-        category.UpdatedAt = DateTime.UtcNow;
+        category.UpdatedAt = _dateTimeProvider.UtcNow;
         await _categoryRepository.SaveChangesAsync(cancellationToken);
         return category.ToResponse();
     }
@@ -60,7 +62,7 @@ public sealed class CategoryService : ICategoryService
     {
         var category = await GetCategoryAsync(id, cancellationToken);
         category.IsActive = false;
-        category.UpdatedAt = DateTime.UtcNow;
+        category.UpdatedAt = _dateTimeProvider.UtcNow;
         await _categoryRepository.SaveChangesAsync(cancellationToken);
         return category.ToResponse();
     }

@@ -10,7 +10,7 @@ public sealed class InventoryMovement : Entity
     public InventoryMovementType MovementType { get; set; }
     public int Quantity { get; set; }
     public string? Reason { get; set; }
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; }
 
     public Business? Business { get; set; }
     public Product? Product { get; set; }

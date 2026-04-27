@@ -26,6 +26,14 @@ public sealed class InventoryMovementRepository : IInventoryMovementRepository
     public Task<PagedResult<InventoryMovement>> GetProductHistoryPagedAsync(Guid businessId, Guid productId, PaginationQuery paginationQuery, CancellationToken cancellationToken = default)
         => ToPagedResultAsync(GetProductHistoryQuery(businessId, productId), paginationQuery, cancellationToken);
 
+    public async Task ExecuteInTransactionAsync(Func<CancellationToken, Task> operation, CancellationToken cancellationToken = default)
+    {
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await operation(cancellationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+    }
+
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) => _dbContext.SaveChangesAsync(cancellationToken);
 
     private IQueryable<InventoryMovement> GetByBusinessQuery(Guid businessId)

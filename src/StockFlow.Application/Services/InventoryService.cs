@@ -41,7 +41,7 @@ public sealed class InventoryService : IInventoryService
             throw new ValidationDomainException("Reason is required for exit and adjustment movements.");
         }
 
-        product.ApplyInventoryMovement(request.MovementType, request.Quantity, _dateTimeProvider.UtcNow);
+        var createdAtUtc = _dateTimeProvider.UtcNow;
 
         var movement = new InventoryMovement
         {
@@ -50,11 +50,22 @@ public sealed class InventoryService : IInventoryService
             MovementType = request.MovementType,
             Quantity = request.Quantity,
             Reason = request.Reason?.Trim(),
-            CreatedAt = _dateTimeProvider.UtcNow
+            CreatedAt = createdAtUtc
         };
 
-        await _inventoryMovementRepository.AddAsync(movement, cancellationToken);
-        await _inventoryMovementRepository.SaveChangesAsync(cancellationToken);
+        await _inventoryMovementRepository.ExecuteInTransactionAsync(async ct =>
+        {
+            var quantityDelta = Product.GetInventoryQuantityDelta(request.MovementType, request.Quantity);
+            var stockUpdated = await _productRepository.TryUpdateStockAsync(product.Id, _userContext.BusinessId, quantityDelta, createdAtUtc, ct);
+
+            if (!stockUpdated)
+            {
+                throw new InsufficientStockException($"Product '{product.Name}' does not have enough stock.");
+            }
+
+            await _inventoryMovementRepository.AddAsync(movement, ct);
+        }, cancellationToken);
+
         movement.Product = product;
         return movement.ToResponse();
     }

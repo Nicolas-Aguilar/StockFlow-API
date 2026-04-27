@@ -1,5 +1,5 @@
-using System.Net;
-using System.Text.Json;
+using Microsoft.AspNetCore.Mvc;
+using StockFlow.Api.Extensions;
 using StockFlow.Domain.Exceptions;
 
 namespace StockFlow.Api.Middlewares;
@@ -23,33 +23,37 @@ public sealed class ExceptionHandlingMiddleware
         }
         catch (Exception exception)
         {
-            _logger.LogError(exception, "Unhandled exception while processing request.");
+            LogException(exception);
             await HandleExceptionAsync(context, exception);
         }
     }
 
+    private void LogException(Exception exception)
+    {
+        if (exception is DomainException)
+        {
+            _logger.LogInformation(exception, "Handled request failure: {ExceptionType}", exception.GetType().Name);
+            return;
+        }
+
+        _logger.LogError(exception, "Unhandled exception while processing request.");
+    }
+
     private static Task HandleExceptionAsync(HttpContext context, Exception exception)
     {
-        var statusCode = exception switch
+        ProblemDetails problemDetails = exception switch
         {
-            ValidationDomainException => HttpStatusCode.BadRequest,
-            EntityNotFoundException => HttpStatusCode.NotFound,
-            DuplicateInternalCodeException => HttpStatusCode.Conflict,
-            BusinessAccessDeniedException => HttpStatusCode.Forbidden,
-            ProductExpiredException => HttpStatusCode.Conflict,
-            ProductInactiveException => HttpStatusCode.Conflict,
-            InsufficientStockException => HttpStatusCode.Conflict,
-            _ => HttpStatusCode.InternalServerError
+            ValidationDomainException validationException => context.CreateValidationProblemDetails(validationException.Message, validationException.Message),
+            InvalidUserContextException invalidUserContextException => context.CreateProblemDetails(StatusCodes.Status401Unauthorized, "Unauthorized", invalidUserContextException.Message, "unauthorized"),
+            EntityNotFoundException entityNotFoundException => context.CreateProblemDetails(StatusCodes.Status404NotFound, "Resource not found", entityNotFoundException.Message, "not-found"),
+            DuplicateInternalCodeException duplicateInternalCodeException => context.CreateProblemDetails(StatusCodes.Status409Conflict, "Conflict", duplicateInternalCodeException.Message, "conflict"),
+            BusinessAccessDeniedException businessAccessDeniedException => context.CreateProblemDetails(StatusCodes.Status403Forbidden, "Forbidden", businessAccessDeniedException.Message, "forbidden"),
+            ProductExpiredException productExpiredException => context.CreateProblemDetails(StatusCodes.Status409Conflict, "Conflict", productExpiredException.Message, "conflict"),
+            ProductInactiveException productInactiveException => context.CreateProblemDetails(StatusCodes.Status409Conflict, "Conflict", productInactiveException.Message, "conflict"),
+            InsufficientStockException insufficientStockException => context.CreateProblemDetails(StatusCodes.Status409Conflict, "Conflict", insufficientStockException.Message, "conflict"),
+            _ => context.CreateProblemDetails(StatusCodes.Status500InternalServerError, "Internal server error", "An unexpected error occurred.", "internal-server-error")
         };
 
-        context.Response.ContentType = "application/json";
-        context.Response.StatusCode = (int)statusCode;
-
-        var payload = JsonSerializer.Serialize(new
-        {
-            message = statusCode == HttpStatusCode.InternalServerError ? "An unexpected error occurred." : exception.Message
-        });
-
-        return context.Response.WriteAsync(payload);
+        return context.WriteProblemDetailsAsync(problemDetails);
     }
 }

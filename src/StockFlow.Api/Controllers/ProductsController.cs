@@ -32,9 +32,9 @@ public sealed class ProductsController : ControllerBase
     }
 
     [HttpGet("search")]
-    public async Task<ActionResult<PagedResponse<ProductResponse>>> Search([FromQuery] string term, [FromQuery] PaginationQuery paginationQuery, CancellationToken cancellationToken)
+    public async Task<ActionResult<PagedResponse<ProductResponse>>> Search([FromQuery] string? term, [FromQuery] PaginationQuery paginationQuery, CancellationToken cancellationToken)
     {
-        return Ok(await _productService.SearchAsync(term, paginationQuery, cancellationToken));
+        return Ok(await _productService.SearchAsync(term ?? string.Empty, paginationQuery, cancellationToken));
     }
 
     [HttpGet("low-stock")]

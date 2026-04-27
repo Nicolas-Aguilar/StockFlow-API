@@ -21,8 +21,15 @@
 - Todo cambio de stock deja historial en `InventoryMovements`.
 - `Entry` suma stock.
 - `Exit` y `Adjustment` descuentan stock y requieren motivo.
+- `Exit` y `Adjustment` usan la misma proteccion atomica de descuento que evita sobreventa en concurrencia.
 - `Sale` solo se genera automaticamente desde ventas.
 - No se permite dejar stock negativo.
+
+## Errores y contratos HTTP
+
+- Los errores de validacion y negocio se devuelven con `ProblemDetails` o `ValidationProblemDetails`.
+- Toda respuesta de error controlada incluye `traceId` para correlacion en logs.
+- Un JWT autenticado con claims obligatorios faltantes o invalidos responde `401 Unauthorized`.
 
 ## Ventas
 

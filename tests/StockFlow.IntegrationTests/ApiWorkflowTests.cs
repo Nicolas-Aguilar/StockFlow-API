@@ -1,12 +1,16 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Claims;
 using System.Text.Json;
+using Microsoft.AspNetCore.Mvc;
 using StockFlow.Application.Common;
 using StockFlow.Application.DTOs.Auth;
+using StockFlow.Application.DTOs.Businesses;
 using StockFlow.Application.DTOs.Categories;
 using StockFlow.Application.DTOs.Inventory;
 using StockFlow.Application.DTOs.Products;
+using StockFlow.Application.DTOs.Reports;
 using StockFlow.Application.DTOs.Sales;
 
 namespace StockFlow.IntegrationTests;
@@ -38,6 +42,13 @@ public sealed class ApiWorkflowTests : IClassFixture<StockFlowApiFactory>, IAsyn
     {
         var response = await _client.GetAsync("/api/businesses/me");
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+
+        var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.NotNull(problem);
+        Assert.Equal(401, problem!.Status);
+        Assert.Equal("Unauthorized", problem.Title);
+        Assert.Equal("https://stockflow-api/problems/unauthorized", problem.Type);
+        Assert.True(problem.Extensions.ContainsKey("traceId"));
     }
 
     [Fact]
@@ -356,6 +367,192 @@ public sealed class ApiWorkflowTests : IClassFixture<StockFlowApiFactory>, IAsyn
         var response = await _client.GetAsync(url);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<ValidationProblemDetails>();
+        Assert.NotNull(problem);
+        Assert.Equal(400, problem!.Status);
+        Assert.Equal("One or more validation errors occurred.", problem.Title);
+        Assert.Equal("https://stockflow-api/problems/validation", problem.Type);
+        Assert.True(problem.Extensions.ContainsKey("traceId"));
+    }
+
+    [Fact]
+    public async Task ProductSearch_WithBlankTerm_ReturnsValidationProblemDetails()
+    {
+        await RegisterAndAuthenticateAsync($"search-{Guid.NewGuid():N}@example.com", "Search Store");
+
+        var response = await _client.GetAsync("/api/products/search?term=%20%20%20");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<ValidationProblemDetails>();
+        Assert.NotNull(problem);
+        Assert.Equal("The search term must not be blank.", problem!.Detail);
+        Assert.True(problem.Extensions.ContainsKey("traceId"));
+    }
+
+    [Fact]
+    public async Task CategoriesListing_ReturnsPagedEnvelope()
+    {
+        await RegisterAndAuthenticateAsync($"categories-page-{Guid.NewGuid():N}@example.com", "Categories Page Store");
+
+        for (var index = 1; index <= 5; index++)
+        {
+            await CreateCategoryAsync($"Category {index}");
+        }
+
+        var response = await _client.GetFromJsonAsync<PagedResponse<CategoryListResponse>>("/api/categories?page=2&pageSize=2");
+
+        Assert.NotNull(response);
+        Assert.Equal(2, response!.Page);
+        Assert.Equal(2, response.PageSize);
+        Assert.Equal(5, response.TotalItems);
+        Assert.Equal(3, response.TotalPages);
+        Assert.Equal(new[] { "Category 3", "Category 4" }, response.Items.Select(category => category.Name).ToArray());
+    }
+
+    [Fact]
+    public async Task AuthenticatedRequest_WithMissingBusinessClaim_ReturnsUnauthorizedProblemDetails()
+    {
+        var context = await RegisterAndLoadIdentityAsync($"claims-missing-{Guid.NewGuid():N}@example.com", "Claims Missing Store");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _factory.CreateToken(new[]
+        {
+            new Claim("userId", context.UserId.ToString())
+        }));
+
+        var response = await _client.GetAsync("/api/businesses/me");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.NotNull(problem);
+        Assert.Equal("Authenticated user is missing the required 'businessId' claim.", problem!.Detail);
+        Assert.True(problem.Extensions.ContainsKey("traceId"));
+    }
+
+    [Fact]
+    public async Task AuthenticatedRequest_WithInvalidUserClaim_ReturnsUnauthorizedProblemDetails()
+    {
+        var context = await RegisterAndLoadIdentityAsync($"claims-invalid-{Guid.NewGuid():N}@example.com", "Claims Invalid Store");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _factory.CreateToken(new[]
+        {
+            new Claim("userId", "not-a-guid"),
+            new Claim("businessId", context.BusinessId.ToString())
+        }));
+
+        var response = await _client.GetAsync("/api/auth/me");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.NotNull(problem);
+        Assert.Equal("Authenticated user has an invalid 'userId' claim.", problem!.Detail);
+    }
+
+    [Fact]
+    public async Task InventoryExit_ConcurrentRequests_AllowSingleWinnerAndPreserveHistory()
+    {
+        var auth = await RegisterAndAuthenticateAsync($"inventory-concurrency-{Guid.NewGuid():N}@example.com", "Inventory Concurrency Store");
+        var category = await CreateCategoryAsync("Warehouse");
+        var product = await CreateProductAsync(category.Id, "Gloves", "GLOVES", 1);
+
+        using var firstClient = _factory.CreateClient();
+        using var secondClient = _factory.CreateClient();
+        firstClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth.Token);
+        secondClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth.Token);
+
+        var request = new CreateInventoryMovementRequest
+        {
+            ProductId = product.Id,
+            MovementType = StockFlow.Domain.Enums.InventoryMovementType.Exit,
+            Quantity = 1,
+            Reason = "Damaged stock"
+        };
+
+        var firstTask = firstClient.PostAsJsonAsync("/api/inventory/movements", request);
+        var secondTask = secondClient.PostAsJsonAsync("/api/inventory/movements", request);
+
+        await Task.WhenAll(firstTask, secondTask);
+
+        var responses = new[] { await firstTask, await secondTask };
+        Assert.Equal(1, responses.Count(response => response.StatusCode == HttpStatusCode.Created));
+        Assert.Equal(1, responses.Count(response => response.StatusCode == HttpStatusCode.Conflict));
+
+        var updatedProduct = await _client.GetFromJsonAsync<ProductResponse>($"/api/products/{product.Id}");
+        var history = await _client.GetFromJsonAsync<PagedResponse<InventoryMovementResponse>>($"/api/inventory/products/{product.Id}/history");
+
+        Assert.Equal(0, updatedProduct!.CurrentStock);
+        Assert.Single(history!.Items, movement => movement.MovementType == StockFlow.Domain.Enums.InventoryMovementType.Exit && movement.Quantity == 1);
+    }
+
+    [Fact]
+    public async Task InventoryAdjustment_DeductsStockAndRequiresReason()
+    {
+        await RegisterAndAuthenticateAsync($"inventory-adjustment-{Guid.NewGuid():N}@example.com", "Inventory Adjustment Store");
+        var category = await CreateCategoryAsync("Cold Storage");
+        var product = await CreateProductAsync(category.Id, "Yogurt", "YOGURT", 5);
+
+        var response = await _client.PostAsJsonAsync("/api/inventory/movements", new CreateInventoryMovementRequest
+        {
+            ProductId = product.Id,
+            MovementType = StockFlow.Domain.Enums.InventoryMovementType.Adjustment,
+            Quantity = 2,
+            Reason = "Count correction"
+        });
+
+        response.EnsureSuccessStatusCode();
+
+        var updatedProduct = await _client.GetFromJsonAsync<ProductResponse>($"/api/products/{product.Id}");
+        var history = await _client.GetFromJsonAsync<PagedResponse<InventoryMovementResponse>>($"/api/inventory/products/{product.Id}/history");
+
+        Assert.Equal(3, updatedProduct!.CurrentStock);
+        Assert.Contains(history!.Items, movement => movement.MovementType == StockFlow.Domain.Enums.InventoryMovementType.Adjustment && movement.Quantity == 2 && movement.Reason == "Count correction");
+    }
+
+    [Fact]
+    public async Task ReportSummaries_PreserveObservableTotals()
+    {
+        await RegisterAndAuthenticateAsync($"reports-{Guid.NewGuid():N}@example.com", "Reports Store");
+        var category = await CreateCategoryAsync("Reports Category");
+        var product = await CreateProductAsync(category.Id, "Bandage", "BANDAGE", 10);
+
+        var saleResponse = await _client.PostAsJsonAsync("/api/sales", new CreateSaleRequest
+        {
+            PaymentMethod = StockFlow.Domain.Enums.PaymentMethod.Cash,
+            Items = new[]
+            {
+                new CreateSaleItemRequest
+                {
+                    ProductId = product.Id,
+                    Quantity = 3
+                }
+            }
+        });
+
+        saleResponse.EnsureSuccessStatusCode();
+        var currentDate = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        var salesSummary = await _client.GetFromJsonAsync<SalesSummaryResponse>($"/api/reports/sales-summary?from={currentDate:yyyy-MM-dd}&to={currentDate:yyyy-MM-dd}");
+        var profitSummary = await _client.GetFromJsonAsync<ProfitSummaryResponse>($"/api/reports/profit-summary?from={currentDate:yyyy-MM-dd}&to={currentDate:yyyy-MM-dd}");
+        var inventoryValuation = await _client.GetFromJsonAsync<InventoryValuationResponse>("/api/reports/inventory-valuation");
+
+        Assert.NotNull(salesSummary);
+        Assert.Equal(1, salesSummary!.TotalSales);
+        Assert.Equal(10.5m, salesSummary.TotalRevenue);
+
+        Assert.NotNull(profitSummary);
+        Assert.Equal(1, profitSummary!.TotalSales);
+        Assert.Equal(4.5m, profitSummary.EstimatedProfit);
+
+        Assert.NotNull(inventoryValuation);
+        Assert.Equal(1, inventoryValuation!.TotalProducts);
+        Assert.Equal(14m, inventoryValuation.PurchaseValue);
+        Assert.Equal(24.5m, inventoryValuation.PotentialSaleValue);
+        Assert.Equal(10.5m, inventoryValuation.PotentialProfit);
+    }
+
+    private async Task<TestIdentityContext> RegisterAndLoadIdentityAsync(string email, string businessName)
+    {
+        await RegisterAndAuthenticateAsync(email, businessName);
+        var profile = await _client.GetFromJsonAsync<UserProfileResponse>("/api/auth/me");
+        var business = await _client.GetFromJsonAsync<BusinessResponse>("/api/businesses/me");
+        return new TestIdentityContext(profile!.Id, business!.Id);
     }
 
     private async Task<AuthResponse> RegisterAndAuthenticateAsync(string email, string businessName)
@@ -405,4 +602,6 @@ public sealed class ApiWorkflowTests : IClassFixture<StockFlowApiFactory>, IAsyn
     }
 
     private sealed record CategoryResponse(Guid Id, string Name);
+    private sealed record CategoryListResponse(Guid Id, string Name);
+    private sealed record TestIdentityContext(Guid UserId, Guid BusinessId);
 }

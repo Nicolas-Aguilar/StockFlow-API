@@ -119,18 +119,25 @@ public sealed class Product : AuditableEntity
 
     public void ApplyInventoryMovement(InventoryMovementType movementType, int quantity, DateTime updatedAtUtc)
     {
+        var quantityDelta = GetInventoryQuantityDelta(movementType, quantity);
+
+        if (quantityDelta < 0)
+        {
+            EnsureHasEnoughStock(-quantityDelta);
+        }
+
+        CurrentStock += quantityDelta;
+        UpdatedAt = updatedAtUtc;
+    }
+
+    public static int GetInventoryQuantityDelta(InventoryMovementType movementType, int quantity)
+    {
         if (quantity <= 0)
         {
             throw new ValidationDomainException("Inventory movement quantity must be greater than zero.");
         }
 
-        if (movementType != InventoryMovementType.Entry)
-        {
-            EnsureHasEnoughStock(quantity);
-        }
-
-        CurrentStock += movementType == InventoryMovementType.Entry ? quantity : -quantity;
-        UpdatedAt = updatedAtUtc;
+        return movementType == InventoryMovementType.Entry ? quantity : -quantity;
     }
 
     public void Deactivate(DateTime updatedAtUtc)

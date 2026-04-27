@@ -5,6 +5,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>stockflow-api-4e6f9618-3f56-4a2d-b704-e6c5f493f4c9</UserSecretsId>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
+    <BaseOutputPath>build\bin\</BaseOutputPath>
   </PropertyGroup>
 
   <ItemGroup>
