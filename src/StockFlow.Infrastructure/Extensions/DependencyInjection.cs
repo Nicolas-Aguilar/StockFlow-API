@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using StockFlow.Application.Interfaces;
 using StockFlow.Application.Services;
+using StockFlow.Infrastructure.Bootstrap;
 using StockFlow.Infrastructure.Data;
 using StockFlow.Infrastructure.Repositories;
 using StockFlow.Infrastructure.Services;
@@ -14,6 +15,14 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
+        var bootstrapSection = configuration.GetSection(BootstrapOptions.SectionName);
+        var bootstrapOptions = new BootstrapOptions
+        {
+            ApplyMigrations = bool.TryParse(bootstrapSection["ApplyMigrations"], out var applyMigrations) && applyMigrations,
+            SeedDemoData = bool.TryParse(bootstrapSection["SeedDemoData"], out var seedDemoData) && seedDemoData
+        };
+        services.AddSingleton(Options.Create(bootstrapOptions));
+
         var connectionString = configuration.GetConnectionString("DefaultConnection");
         EnsureSecretConfigured("ConnectionStrings:DefaultConnection", connectionString);
 
@@ -40,6 +49,7 @@ public static class DependencyInjection
         services.AddScoped<IPasswordService, PasswordService>();
         services.AddSingleton<ITokenService, JwtTokenService>();
         services.AddSingleton<IDateTimeProvider, DateTimeProvider>();
+        services.AddScoped<DemoDataSeeder>();
 
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IBusinessService, BusinessService>();

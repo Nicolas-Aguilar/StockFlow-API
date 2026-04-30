@@ -1,79 +1,275 @@
-# StockFlow API
+# StockFlow API — Production-style Inventory & Sales Backend
 
-[![CI](https://github.com/Nicolas-Aguilar/StockFlow-API/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Nicolas-Aguilar/StockFlow-API/actions/workflows/ci.yml)
+[![Build / CI](https://github.com/Nicolas-Aguilar/StockFlow-API/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Nicolas-Aguilar/StockFlow-API/actions/workflows/ci.yml)
+![.NET 8](https://img.shields.io/badge/.NET-8-512BD4?logo=dotnet)
+![SQL Server](https://img.shields.io/badge/SQL%20Server-2022-CC2927?logo=microsoftsqlserver&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
+[![License](https://img.shields.io/badge/license-not%20specified-lightgrey)](#license)
+[![Tests](https://img.shields.io/badge/tests-unit%20%2B%20integration-0A7E07)](#testing)
+[![Coverage](https://img.shields.io/badge/coverage-not%20published-lightgrey)](#quality-signals)
 
-StockFlow API es una API REST en ASP.NET Core Web API orientada a un caso de negocio real: ayudar a un pequeno comercio a controlar catalogo, inventario, ventas, caducidad y reportes operativos sin sacrificar seguridad, reglas de negocio ni mantenibilidad.
+StockFlow API es un backend profesional en ASP.NET Core para un sistema de inventario y ventas pensado para pequenos negocios.
+Resuelve problemas reales de catalogo, stock, caducidad, ventas y reportes sin caer en un CRUD basico.
+El proyecto prioriza reglas de negocio, aislamiento por negocio mediante `BusinessId`, seguridad con JWT y una arquitectura por capas mantenible.
+Tambien sirve como pieza de portfolio para demostrar una forma seria de construir, probar y documentar una API .NET moderna.
 
-Es un proyecto pensado tanto para uso local y aprendizaje practico como para portafolio backend: arquitectura por capas, autenticacion JWT, EF Core con SQL Server, Swagger, pruebas automatizadas y documentacion tecnica consistente.
+## Why this project matters
 
-> Estado actual: base funcional de la version 1 implementada con autenticacion JWT, EF Core, SQL Server, Swagger, pruebas y documentacion tecnica.
+Muchos proyectos de inventario de portfolio muestran endpoints CRUD, pero no modelan decisiones que importan en produccion: autenticacion, multi-tenant simple, validaciones de negocio, ventas transaccionales, descuento automatico de stock, reportes y una historia de pruebas.
 
-## Quickstart
+StockFlow API apunta exactamente a ese espacio: una API backend que se puede explicar facil en una entrevista tecnica, pero que tambien muestra criterio de arquitectura y foco en un caso de negocio entendible.
 
-### Opcion recomendada: bootstrap automatico
+## Quick capabilities
 
-PowerShell:
+| Capability | Status | Notes |
+|---|---|---|
+| Auth JWT | OK | Registro, login y `GET /api/auth/me` |
+| Multi-tenant por BusinessId | OK | Todo dato operativo se filtra por `BusinessId` |
+| Productos | OK | Catalogo, busqueda, bajo stock, expiracion, activacion/desactivacion |
+| Inventario | OK | Movimientos manuales e historial por producto |
+| Ventas | OK | Venta transaccional con descuento automatico de stock |
+| Reportes | OK | Bajo stock, expiracion, top sellers, ventas, ganancias e inventario |
+| Pruebas unitarias | OK | Suite en `tests/StockFlow.UnitTests` |
+| Pruebas de integracion | OK | Suite en `tests/StockFlow.IntegrationTests` con Docker/Testcontainers |
+| CI | OK | Workflow en `.github/workflows/ci.yml` |
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1
+## Architecture at a glance
+
+```mermaid
+flowchart LR
+    Client[Client / Swagger / Postman]
+    Api[StockFlow.Api\nControllers + Middleware]
+    App[StockFlow.Application\nUse cases + Services + DTOs]
+    Domain[StockFlow.Domain\nBusiness rules + Entities]
+    Infra[StockFlow.Infrastructure\nEF Core + Repositories + JWT + Bootstrap]
+    Db[(SQL Server)]
+
+    Client --> Api
+    Api --> App
+    App --> Domain
+    Api --> Infra
+    Infra --> App
+    Infra --> Domain
+    Infra --> Db
 ```
 
-PowerShell + API levantada al final:
+## Main business flow
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1 -RunApi
+```mermaid
+flowchart TD
+    A[Registrar usuario] --> B[Crear negocio]
+    B --> C[Crear producto]
+    C --> D[Registrar venta]
+    D --> E[Descontar stock]
+    E --> F[Consultar reporte]
 ```
 
-Bash:
+## Why Docker-first
+
+El flujo principal ya esta preparado para levantar API + SQL Server con un solo comando, incluyendo healthcheck y bootstrap al iniciar. Eso reduce friccion para reviewers, reclutadores y cualquier persona que quiera probar el proyecto desde cero sin pelear con configuraciones locales primero.
+
+## Getting started from zero
+
+### Prerequisites
+
+- Docker Desktop o Docker Engine en ejecucion
+- Git
+- Opcional para flujo local: .NET SDK 8
+
+### Recommended path: Docker-first
+
+### 1. Crear archivo de entorno
 
 ```bash
-./scripts/bootstrap.sh
+cp .env.example .env
 ```
 
-Bash + API levantada al final:
+Configura al menos estas variables en `.env`:
+
+- `SQLSERVER_SA_PASSWORD`: password local para SQL Server
+- `JWT_KEY`: clave JWT larga para desarrollo local
+
+Los demas valores del compose tienen defaults razonables.
+
+### 2. Levantar el stack completo
 
 ```bash
-./scripts/bootstrap.sh --run-api
+docker compose up --build
 ```
 
-El bootstrap hace de forma idempotente:
+Esto inicia:
 
-- crea `.env` local si no existe
-- genera credenciales locales para SQL Server y JWT fuera del repositorio
-- sincroniza `dotnet user-secrets` en `src/StockFlow.Api`
-- levanta SQL Server con Docker Compose y espera el healthcheck
-- ejecuta `dotnet tool restore`, `dotnet restore`, `dotnet ef database update` y `dotnet build`
+- `sqlserver` con healthcheck
+- `api` en `http://localhost:8080`
+- bootstrap de base de datos al arrancar
 
-## Que aporta este backend
+### 3. Abrir endpoints utiles
 
-- Gestiona autenticacion, negocio, categorias, productos, inventario, ventas y reportes operativos desde una misma API
-- Aplica aislamiento por `BusinessId` para evitar cruces entre negocios
-- Mantiene controladores delgados y reglas de negocio en capas de aplicacion y dominio
-- Calcula total, ganancia y movimientos de inventario en backend, no en el cliente
-- Usa SQL Server real en desarrollo local y pruebas de integracion con flujo HTTP completo
+- Swagger: `http://localhost:8080/swagger`
+- Health: `http://localhost:8080/health`
 
-## Stack y arquitectura
+### 4. Seed demo opcional
 
-### Stack principal
-
-- C# / .NET 8
-- ASP.NET Core Web API
-- Entity Framework Core + SQL Server
-- JWT Bearer Authentication
-- Swagger / OpenAPI
-- xUnit
-- Docker Compose para SQL Server local
-
-### Arquitectura
-
-La solucion sigue arquitectura por capas:
+Si quieres probar la API con datos iniciales, cambia en `.env`:
 
 ```text
-StockFlow.Api -> StockFlow.Application -> StockFlow.Domain
-StockFlow.Infrastructure -> StockFlow.Application + StockFlow.Domain
+BOOTSTRAP_SEED_DEMO_DATA=true
 ```
 
-Proyectos incluidos:
+Luego vuelve a levantar el stack:
+
+```bash
+docker compose up --build
+```
+
+Si el seed esta activo, se crea:
+
+- usuario: `demo@stockflow.local`
+- password: `Demo12345!`
+- negocio: `StockFlow Demo Store`
+
+### Local alternative: .NET CLI + SQL Server en Docker
+
+Si prefieres ejecutar solo SQL Server en contenedor y correr la API en host:
+
+```bash
+docker compose up -d sqlserver
+dotnet restore StockFlow.sln
+dotnet build StockFlow.sln
+dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Server=localhost,1433;Database=StockFlowDb;User Id=sa;Password=<tu-password-local>;TrustServerCertificate=True;" --project src/StockFlow.Api
+dotnet user-secrets set "Jwt:Key" "<tu-clave-jwt-local-larga-y-unica>" --project src/StockFlow.Api
+dotnet run --project src/StockFlow.Api
+```
+
+En este flujo, Swagger tambien queda disponible en el entorno de desarrollo local de la API.
+
+### Environment variables
+
+`docker-compose.yml` usa principalmente estas variables:
+
+- `SQLSERVER_SA_PASSWORD`
+- `SQLSERVER_SQL_PORT`
+- `API_HTTP_PORT`
+- `JWT_KEY`
+- `JWT_ISSUER`
+- `JWT_AUDIENCE`
+- `BOOTSTRAP_APPLY_MIGRATIONS`
+- `BOOTSTRAP_SEED_DEMO_DATA`
+
+Defaults importantes:
+
+- `BOOTSTRAP_APPLY_MIGRATIONS=true`
+- `BOOTSTRAP_SEED_DEMO_DATA=false`
+- `API_HTTP_PORT=8080`
+
+## Example API response
+
+Ejemplo visual basado en la respuesta de autenticacion (`AuthResponse`):
+
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "expiresAtUtc": "2026-04-30T01:30:00Z",
+  "user": {
+    "id": "2d3df7bb-6d45-47f2-a99f-6aa148a8f1f1",
+    "fullName": "Ana Perez",
+    "email": "ana@stockflow.local",
+    "isActive": true,
+    "createdAt": "2026-04-29T23:00:00Z",
+    "updatedAt": "2026-04-29T23:00:00Z"
+  },
+  "business": {
+    "id": "20f5529a-36eb-4aa4-b6bf-9c573b7c57f5",
+    "ownerUserId": "2d3df7bb-6d45-47f2-a99f-6aa148a8f1f1",
+    "name": "Ana Market",
+    "description": "Negocio demo para pruebas locales",
+    "isActive": true,
+    "createdAt": "2026-04-29T23:00:00Z",
+    "updatedAt": "2026-04-29T23:00:00Z"
+  }
+}
+```
+
+## Testing
+
+Ejecutar toda la solucion:
+
+```bash
+dotnet test StockFlow.sln
+```
+
+Ejecutar solo unit tests:
+
+```bash
+dotnet test tests/StockFlow.UnitTests/StockFlow.UnitTests.csproj
+```
+
+Ejecutar solo integration tests:
+
+```bash
+dotnet test tests/StockFlow.IntegrationTests/StockFlow.IntegrationTests.csproj
+```
+
+Notas importantes:
+
+- Las pruebas de integracion usan Testcontainers y SQL Server real
+- Docker debe estar disponible para `tests/StockFlow.IntegrationTests`
+- El workflow de CI actual restaura, compila y ejecuta `dotnet test StockFlow.sln`
+
+## Swagger screenshots
+
+Todavia no hay capturas versionadas en el repositorio. Esta seccion queda lista para agregarlas sin reestructurar el README.
+
+### Placeholder 1 - Auth endpoints
+
+Agregar una captura de Swagger mostrando `POST /api/auth/register`, `POST /api/auth/login` y `GET /api/auth/me` autenticado.
+
+Sugerencia de ruta: `docs/images/swagger/auth-overview.png`
+
+### Placeholder 2 - Products and inventory
+
+Agregar una captura de Swagger con `POST /api/products`, `GET /api/products/low-stock` y `POST /api/inventory/movements`.
+
+Sugerencia de ruta: `docs/images/swagger/products-inventory.png`
+
+### Placeholder 3 - Reports
+
+Agregar una captura con `GET /api/reports/sales-summary`, `GET /api/reports/profit-summary` y `GET /api/reports/inventory-valuation`.
+
+Sugerencia de ruta: `docs/images/swagger/reports.png`
+
+## Project modules
+
+- Auth: `register`, `login`, `me`
+- Business: `GET/PUT /api/businesses/me`
+- Categories: crear, listar, consultar, actualizar y desactivar
+- Products: crear, listar, consultar, buscar, bajo stock, proximos a caducar, caducados, actualizar, desactivar y eliminar segun historial
+- Inventory: movimientos manuales, listado e historial por producto
+- Sales: creacion transaccional, consulta general, por id y por rango de fechas
+- Reports: bajo stock, proximos a caducar, caducados, mas vendidos, resumen de ventas, resumen de ganancias y valoracion de inventario
+
+## What this project demonstrates
+
+- Arquitectura por capas aplicada a una API .NET realista
+- Reglas de negocio que viven fuera de los controladores
+- Seguridad base con JWT y control de acceso por negocio
+- EF Core con SQL Server para persistencia y bootstrap automatizado
+- Onboarding Docker-first para reducir tiempo de puesta en marcha
+- Pruebas unitarias e integracion para validar comportamiento critico
+- Documentacion pensada tanto para desarrollo como para portfolio
+
+## For recruiters / reviewers
+
+Si quieres evaluar el proyecto rapido, este es el mejor recorrido:
+
+1. Levanta `docker compose up --build`
+2. Abre `http://localhost:8080/swagger`
+3. Registra un usuario o activa el seed demo
+4. Crea un producto, registra una venta y consulta un reporte
+5. Revisa la separacion por capas en `src/`
+6. Revisa pruebas en `tests/` y CI en `.github/workflows/ci.yml`
+
+Lo mas relevante para una revision tecnica suele estar en:
 
 - `src/StockFlow.Api`
 - `src/StockFlow.Application`
@@ -82,159 +278,13 @@ Proyectos incluidos:
 - `tests/StockFlow.UnitTests`
 - `tests/StockFlow.IntegrationTests`
 
-## Modulos implementados
+## Quality signals
 
-- Auth: `register`, `login`, `me`
-- Business: `GET/PUT /api/businesses/me`
-- Categories: crear, listar, consultar, actualizar y desactivar
-- Categories: crear, listar, consultar, actualizar y desactivar con respuesta paginada en `GET /api/categories`
-- Products: crear, listar, consultar, buscar, stock bajo, proximos a caducar, caducados, actualizar, desactivar y eliminar segun historial
-- Inventory: movimientos manuales, listado e historial por producto
-- Inventory: `Entry` suma stock; `Exit` y `Adjustment` descuentan stock con motivo obligatorio y proteccion atomica contra sobre-deduccion concurrente
-- Sales: creacion transaccional, consulta general, por id y por rango de fechas
-- Reports: bajo stock, proximos a caducar, caducados, mas vendidos, resumen de ventas, resumen de ganancias y valoracion de inventario
-- Reports: resumenes e inventario valorado calculados en base de datos para evitar cargas innecesarias en memoria
+- `Build / CI`: existe workflow real en `.github/workflows/ci.yml`
+- `Tests`: existen suites de unit e integration tests en `tests/`
+- `Coverage`: el repositorio incluye `coverlet.collector`, pero hoy no publica un badge ni un reporte versionado; por eso el badge se deja como placeholder honesto
 
-## Reglas backend destacadas
-
-- Todo dato operativo usa `BusinessId`
-- Ninguna consulta operativa busca solo por `Id`; tambien valida `BusinessId`
-- La API responde con DTOs; no expone entidades directamente
-- La API usa `ProblemDetails` y `ValidationProblemDetails` con `traceId` para errores de autenticacion, validacion, negocio y fallos inesperados
-- Las ventas calculan total y ganancia en backend
-- Cada venta descuenta stock y crea `InventoryMovement` tipo `Sale` dentro de una transaccion
-- Un producto con historial no se elimina fisicamente: se desactiva
-- Un producto inactivo o caducado no puede venderse
-
-## Configuracion local segura
-
-StockFlow no versiona credenciales operativas. Para desarrollo local se usa esta estrategia:
-
-- Docker Compose toma la password de SQL Server desde un archivo local `.env` ignorado por git
-- La API y EF Core toman `ConnectionStrings:DefaultConnection` y `Jwt:Key` desde `dotnet user-secrets` o variables de entorno
-- `appsettings.json` solo conserva placeholders y valores no sensibles
-
-> Importante: si alguna credencial local quedo expuesta en el historial antes de este enfoque, considerala comprometida y no la reutilices fuera de tu maquina.
-
-## Comandos importantes
-
-### Bootstrap / setup
-
-Opcion recomendada en Windows:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1
-```
-
-Alternativa en Bash:
-
-```bash
-./scripts/bootstrap.sh
-```
-
-### Ejecutar la API
-
-```bash
-dotnet run --project src/StockFlow.Api
-```
-
-Swagger queda disponible en `/swagger`.
-
-### Compilar
-
-```bash
-dotnet build StockFlow.sln
-```
-
-### Probar
-
-```bash
-dotnet test StockFlow.sln
-```
-
-### Caveat de pruebas de integracion
-
-Las pruebas de `tests/StockFlow.IntegrationTests` usan Testcontainers, SQL Server real y migraciones de EF Core; requieren Docker disponible y encendido.
-
-Si quieres ejecutar solo integracion:
-
-```bash
-dotnet test tests/StockFlow.IntegrationTests/StockFlow.IntegrationTests.csproj
-```
-
-## Flujo manual equivalente
-
-### 1. Preparar variables locales para Docker
-
-```bash
-cp .env.example .env
-```
-
-Edita `.env` y define al menos una password local para `SQLSERVER_SA_PASSWORD`.
-
-Cadena de conexion esperada para user-secrets o variables de entorno:
-
-```text
-Server=localhost,1433;Database=StockFlowDb;User Id=sa;Password=<tu-password-local>;TrustServerCertificate=True;
-```
-
-### 2. Levantar SQL Server local
-
-```bash
-docker compose up -d
-```
-
-### 3. Configurar secretos de la API
-
-Opcion recomendada para desarrollo local:
-
-```bash
-dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Server=localhost,1433;Database=StockFlowDb;User Id=sa;Password=<tu-password-local>;TrustServerCertificate=True;" --project src/StockFlow.Api
-dotnet user-secrets set "Jwt:Key" "<tu-clave-jwt-local-larga-y-unica>" --project src/StockFlow.Api
-```
-
-Alternativa para CI, shells efimeros o contenedores:
-
-```bash
-ConnectionStrings__DefaultConnection="Server=localhost,1433;Database=StockFlowDb;User Id=sa;Password=<tu-password-local>;TrustServerCertificate=True;"
-Jwt__Key="<tu-clave-jwt-local-larga-y-unica>"
-```
-
-`Jwt:Issuer`, `Jwt:Audience` y `Jwt:ExpirationMinutes` permanecen en `appsettings.json` porque no son secretos.
-
-### 4. Restaurar y compilar
-
-```bash
-dotnet restore
-dotnet build StockFlow.sln
-```
-
-### 5. Aplicar migraciones
-
-```bash
-dotnet tool restore
-dotnet ef database update --project src/StockFlow.Infrastructure --startup-project src/StockFlow.Api
-```
-
-`AppDbContextFactory` usa la misma configuracion que la API: `appsettings.json`, `appsettings.{Environment}.json`, user-secrets y variables de entorno. Si falta `ConnectionStrings:DefaultConnection`, `dotnet ef` falla con un mensaje explicito.
-
-### 6. Ejecutar la API
-
-```bash
-dotnet run --project src/StockFlow.Api
-```
-
-Si intentas iniciar la API sin `ConnectionStrings:DefaultConnection` o `Jwt:Key`, el arranque falla de forma intencional para evitar configuraciones inseguras o ambiguas.
-
-## Verificacion base
-
-```bash
-dotnet restore
-dotnet build StockFlow.sln
-dotnet test StockFlow.sln
-```
-
-## Documentacion tecnica
+## Technical documentation
 
 - `docs/reglas-negocio.md`
 - `docs/modelo-base-datos.md`
@@ -244,9 +294,16 @@ dotnet test StockFlow.sln
 - `docs/seguridad.md`
 - `docs/estrategia-pruebas.md`
 
-## Proximos pasos razonables
+## Useful commands
 
-- ampliar cobertura automatizada en reportes e inventario manual
-- seguir ampliando cobertura de escenarios de reportes y bordes de negocio si se agregan filtros nuevos
-- agregar ejemplos HTTP completos y capturas de Swagger para reforzar el enfoque de portafolio
-- incorporar seeds opcionales de demo para acelerar revisiones funcionales
+```bash
+dotnet build StockFlow.sln
+dotnet test StockFlow.sln
+docker compose config
+docker compose down
+docker compose down -v
+```
+
+## License
+
+Por ahora el repositorio no incluye un archivo `LICENSE`. El badge se marca como `not specified` para no asumir una licencia que todavia no fue declarada.

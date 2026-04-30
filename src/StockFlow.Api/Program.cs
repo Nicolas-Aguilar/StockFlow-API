@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using StockFlow.Application.Interfaces;
+using StockFlow.Infrastructure.Bootstrap;
 using StockFlow.Infrastructure.Extensions;
 using StockFlow.Infrastructure.Services;
 using StockFlow.Api.Extensions;
@@ -28,6 +29,7 @@ builder.Services
             };
         };
     });
+builder.Services.AddHealthChecks();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -122,10 +124,17 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+if (!string.Equals(Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER"), "true", StringComparison.OrdinalIgnoreCase))
+{
+    app.UseHttpsRedirection();
+}
+
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapHealthChecks("/health");
+
+await app.Services.ApplyBootstrapAsync();
 
 static void EnsureSecretConfigured(string settingName, string? value)
 {
